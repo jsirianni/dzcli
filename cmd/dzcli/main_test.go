@@ -23,6 +23,6 @@ func fixturePath(t *testing.T, parts ...string) string {
 		t.Fatal("runtime.Caller failed")
 	}
 
-	args := append([]string{filepath.Dir(file), "testdata"}, parts...)
+	args := append([]string{filepath.Dir(file), "..", "..", "testdata"}, parts...)
 	return filepath.Join(args...)
 }
