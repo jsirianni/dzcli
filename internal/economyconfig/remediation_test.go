@@ -22,6 +22,22 @@ func TestEventSpawnValidationRejectsEmptyEvent(t *testing.T) {
 	}
 }
 
+func TestTerritoryValidationRequiresLiveValidZonesForCoverage(t *testing.T) {
+	count, err := ParseTerritoryData([]byte(`<territory-type />`), "territory.xml")
+	if err != nil || count != 0 {
+		t.Fatalf("minimal territory count=%d err=%v", count, err)
+	}
+	valid := `<territory-type><territory><zone name="Zone_Hare" smin="0" smax="0" dmin="0" dmax="2" x="100" z="200" r="50" /></territory></territory-type>`
+	count, err = ParseTerritoryData([]byte(valid), "territory.xml")
+	if err != nil || count != 1 {
+		t.Fatalf("live territory count=%d err=%v", count, err)
+	}
+	invalid := `<territory-type><territory><zone name="Broken" smin="0" smax="0" dmin="0" dmax="2" x="100" z="200" r="0" /></territory></territory-type>`
+	if _, err := ParseTerritoryData([]byte(invalid), "territory.xml"); err == nil || !strings.Contains(err.Error(), "greater than 0") {
+		t.Fatalf("invalid territory err=%v", err)
+	}
+}
+
 func TestMissingFixedSpawnUsesActiveAndEnvironmentTerritoryContext(t *testing.T) {
 	root := t.TempDir()
 	writeRemediationFixture(t, filepath.Join(root, "cfgeconomycore.xml"), `<economycore />`)
@@ -35,7 +51,7 @@ func TestMissingFixedSpawnUsesActiveAndEnvironmentTerritoryContext(t *testing.T)
 </events>`)
 	writeRemediationFixture(t, filepath.Join(root, "cfgeventspawns.xml"), `<eventposdef><event name="StaticSpawned"><pos x="1" z="2" /></event></eventposdef>`)
 	writeRemediationFixture(t, filepath.Join(root, "cfgenvironment.xml"), `<env><territories><file path="env/bear.xml" /><territory name="Bear"><file usable="bear" /></territory></territories></env>`)
-	writeRemediationFixture(t, filepath.Join(root, "env", "bear.xml"), `<territory-type />`)
+	writeRemediationFixture(t, filepath.Join(root, "env", "bear.xml"), `<territory-type><territory><zone name="Bear" smin="0" smax="1" dmin="0" dmax="1" x="1" z="2" r="50" /></territory></territory-type>`)
 
 	statuses, err := InspectEconomy(root)
 	if err != nil {
@@ -60,7 +76,7 @@ func TestEveryEconomyWarningHasStructuredRemediation(t *testing.T) {
 			t.Fatalf("%s warning details = %d, warnings = %d", status.Kind, len(status.WarningDetails), len(status.Warnings))
 		}
 		for _, warning := range status.WarningDetails {
-			if len(warning.Remediation) == 0 && !warning.ManualOnly {
+			if len(warning.Remediation) == 0 && len(warning.Actions) == 0 && !warning.ManualOnly {
 				t.Fatalf("warning lacks remediation: %#v", warning)
 			}
 		}
@@ -97,6 +113,11 @@ func TestRemediationCommandsPowerShellQuoteValuesAndPathsWithSpaces(t *testing.T
 	for _, status := range statuses {
 		for _, warning := range status.WarningDetails {
 			commands = append(commands, warning.Remediation...)
+			for _, action := range warning.Actions {
+				if action.Command != "" {
+					commands = append(commands, action.Command)
+				}
+			}
 		}
 	}
 	if len(commands) == 0 {
@@ -111,7 +132,7 @@ func TestRemediationCommandsPowerShellQuoteValuesAndPathsWithSpaces(t *testing.T
 		}
 	}
 	commandText := strings.Join(commands, "\n")
-	for _, expected := range []string{"types 'Odd Item''s'", "'Missing & Tier'", "types 'WoodenLog'", "event-spawns 'AnimalCow'", "path 'env/missing.xml'"} {
+	for _, expected := range []string{"types 'Odd Item''s'", "'Missing & Tier'", "types 'WoodenLog'", "path 'env/missing.xml'"} {
 		if !strings.Contains(commandText, expected) {
 			t.Fatalf("commands missing quoted value %q:\n%s", expected, commandText)
 		}

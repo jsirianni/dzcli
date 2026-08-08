@@ -87,6 +87,47 @@ func TestEventSpawnCommandRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
+func TestEventSpawnCommandsExposeInvalidStatusAndGatePlaceholders(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cfgeventspawns.xml")
+	if err := os.WriteFile(path, []byte(`<eventposdef><event name="Empty" /></eventposdef>`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	get := NewGetEventSpawnsCommand(&output)
+	get.SetArgs([]string{"--file", path})
+	if err := get.Execute(); err != nil || !strings.Contains(output.String(), "invalid: requires at least one pos or zone") {
+		t.Fatalf("get invalid status: %v\n%s", err, output.String())
+	}
+	update := NewUpdateEventSpawnsCommand(&bytes.Buffer{})
+	update.SetArgs([]string{"Empty", "--file", path, "--set-zone", "0,0,0,0,0"})
+	if err := update.Execute(); err == nil || !strings.Contains(err.Error(), "--scaffold-placeholder") {
+		t.Fatalf("zero zone error = %v", err)
+	}
+	output.Reset()
+	update = NewUpdateEventSpawnsCommand(&output)
+	update.SetArgs([]string{"Empty", "--file", path, "--set-zone", "0,0,0,0,0", "--scaffold-placeholder"})
+	if err := update.Execute(); err != nil || !strings.Contains(output.String(), "validation only") {
+		t.Fatalf("placeholder update: %v\n%s", err, output.String())
+	}
+}
+
+func TestCreateEventSpawnCopiesEverySourceZone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cfgeventspawns.xml")
+	data := `<eventposdef><event name="Source"><zone smin="0" smax="1" dmin="0" dmax="2" r="50" /><zone smin="1" smax="2" dmin="1" dmax="3" r="60" /></event></eventposdef>`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command := NewCreateEventSpawnsCommand(&bytes.Buffer{})
+	command.SetArgs([]string{"Target", "--file", path, "--copy-zone-from", "Source"})
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	written, _ := os.ReadFile(path)
+	if strings.Count(string(written), "<zone ") != 4 {
+		t.Fatalf("copied XML:\n%s", written)
+	}
+}
+
 func TestEnvironmentCommandsScaffoldAndNeverDeletePhysicalFile(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "cfgenvironment.xml")
@@ -121,6 +162,26 @@ func TestEnvironmentCommandsScaffoldAndNeverDeletePhysicalFile(t *testing.T) {
 	}
 	if _, err := os.Stat(physical); err != nil {
 		t.Fatalf("physical file was deleted: %v", err)
+	}
+}
+
+func TestEnvironmentTemplateScaffoldInfersOwnerAndWritesZones(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "cfgenvironment.xml")
+	data := `<env><territories><territory type="Ambient" name="AmbientHare"><file usable="hare_territories" /></territory></territories></env>`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command := NewCreateEnvironmentCommand(&bytes.Buffer{})
+	command.SetArgs([]string{"path", "env/hare_territories.xml", "--file", path, "--scaffold-template", "--zone", "Zone_Hare,0,0,0,2,100,200,50"})
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	written, _ := os.ReadFile(filepath.Join(root, "env", "hare_territories.xml"))
+	for _, expected := range []string{"AmbientHare", "Zone_Hare", `x="100"`} {
+		if !strings.Contains(string(written), expected) {
+			t.Fatalf("template missing %q:\n%s", expected, written)
+		}
 	}
 }
 

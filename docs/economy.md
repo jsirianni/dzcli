@@ -138,6 +138,8 @@ Inspect explicit spawn positions and zones:
 dzcli get economy event-spawns StaticHeliCrash --file ./mpmissions/dayzOffline.chernarusplus/cfgeventspawns.xml
 ```
 
+The output includes a `STATUS` column. Structurally well-formed files can be inspected even when individual entries are empty or contain invalid position/zone attributes.
+
 Create an entry with one or more positions, an optional angle/height, or a zone:
 
 ```sh
@@ -150,6 +152,12 @@ Update positions or the zone without rewriting unknown XML content:
 dzcli update economy event-spawns StaticHeliCrash --file ./mpmissions/dayzOffline.chernarusplus/cfgeventspawns.xml --add-pos 8000,8000 --remove-pos 1 --set-zone 0,2,0,2,60 --dry-run
 ```
 
+Copy every zone from another valid event, selecting a duplicate source when necessary:
+
+```sh
+dzcli update economy event-spawns StaticHeliCrash --file ./mpmissions/dayzOffline.chernarusplus/cfgeventspawns.xml --copy-zone-from StaticPoliceCar --source-occurrence 1 --dry-run
+```
+
 Use `--set-pos` to replace all positions, `--remove-zone` to remove all zones, `--rename` to rename an event, and `--occurrence` to select duplicate event entries. An update cannot leave an event with no position and no zone.
 
 Delete one event-spawn entry:
@@ -157,6 +165,8 @@ Delete one event-spawn entry:
 ```sh
 dzcli delete economy event-spawns StaticHeliCrash --file ./mpmissions/dayzOffline.chernarusplus/cfgeventspawns.xml --occurrence 1 --dry-run
 ```
+
+Deletion works directly for an empty invalid entry and does not require repairing it first. All-zero zones are rejected unless `--scaffold-placeholder` is supplied; that explicit escape hatch emits a warning because it satisfies validation without promising useful gameplay behavior.
 
 ## Environment References
 
@@ -179,6 +189,20 @@ Absolute paths, symlink escapes, and any raw `..` path component are rejected, e
 ```sh
 dzcli update economy environment path env/bear_territories.xml --file ./mpmissions/dayzOffline.chernarusplus/cfgenvironment.xml --set-path env/bear_territories.xml --scaffold
 ```
+
+Minimal `--scaffold` files are validation-only and contain no live zones. Create an inferred commented template instead:
+
+```sh
+dzcli create economy environment path env/hare_territories.xml --file ./mpmissions/dayzOffline.chernarusplus/cfgenvironment.xml --scaffold-template
+```
+
+Or provide one or more complete, map-specific live zones:
+
+```sh
+dzcli create economy environment path env/hare_territories.xml --file ./mpmissions/dayzOffline.chernarusplus/cfgenvironment.xml --scaffold-template --zone Zone_Hare,0,0,0,2,1661.25,2288.75,50
+```
+
+Zone input is `name,smin,smax,dmin,dmax,x,z,r`; names must be non-empty, numeric fields finite, and radius positive. dzcli may infer the owning territory name/type for comments, but never invents live map coordinates. Existing files are not overwritten.
 
 Create, rename, or delete a usable reference owned by a territory:
 
@@ -261,6 +285,22 @@ dzcli validate economy ./mpmissions/dayzOffline.chernarusplus
 ```
 
 Each warning is followed by a concrete remediation command when dzcli can safely address it. Validation-only findings explicitly require manual XML editing. Missing event-spawn warnings exclude disabled fixed events and events backed by a matching, registered, existing environment territory file.
+
+Preview all supported findings as an ordered plan:
+
+```sh
+dzcli fix economy ./mpmissions/dayzOffline.chernarusplus
+dzcli fix economy ./mpmissions/dayzOffline.chernarusplus --dry-run
+```
+
+Apply unambiguous non-destructive actions, or also permit deterministic deletions after review:
+
+```sh
+dzcli fix economy ./mpmissions/dayzOffline.chernarusplus --apply
+dzcli fix economy ./mpmissions/dayzOffline.chernarusplus --apply --allow-destructive
+```
+
+Plan rows identify mechanical, semantic, placeholder, and deletion actions. Application never executes the printed shell text; it dispatches typed operations, revalidates afterward, and returns non-zero while unresolved findings remain.
 
 For a broad XML parse check, also run:
 

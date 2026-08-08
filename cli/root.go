@@ -62,6 +62,7 @@ func NewRootCommandWithInput(stdin io.Reader, stdout io.Writer, stderr io.Writer
 	root.AddCommand(verbs.NewCreateCommand(stdout))
 	root.AddCommand(verbs.NewUpdateCommand(stdin, stdout))
 	root.AddCommand(verbs.NewDeleteCommand(stdin, stdout))
+	root.AddCommand(verbs.NewFixCommand(stdout))
 	root.AddCommand(verbs.NewValidateCommand(stdout))
 	root.AddCommand(newVersionCommand(stdout))
 	return root

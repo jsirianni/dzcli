@@ -28,7 +28,42 @@ type FileStatus struct {
 type WarningDetail struct {
 	Message     string
 	Remediation []string
+	Actions     []RemediationAction
 	ManualOnly  bool
+}
+
+type RemediationClass string
+
+const (
+	RemediationMechanical  RemediationClass = "mechanical"
+	RemediationSemantic    RemediationClass = "semantic"
+	RemediationPlaceholder RemediationClass = "placeholder"
+	RemediationDeletion    RemediationClass = "deletion"
+)
+
+type RemediationOperation string
+
+const (
+	RemediationNoOperation       RemediationOperation = "none"
+	RemediationDeleteType        RemediationOperation = "delete-type"
+	RemediationDeleteEventSpawn  RemediationOperation = "delete-event-spawn"
+	RemediationCreateEnvironment RemediationOperation = "create-environment-path"
+)
+
+type RemediationAction struct {
+	ID               string
+	Command          string
+	Detail           string
+	Class            RemediationClass
+	Destructive      bool
+	AutoApply        bool
+	AlternativeGroup string
+	DependsOn        []string
+	Operation        RemediationOperation
+	File             string
+	Name             string
+	Occurrence       int
+	OccurrenceSet    bool
 }
 
 type ValidationErrors []string
@@ -80,10 +115,29 @@ func InspectEconomy(path string) ([]FileStatus, error) {
 	statuses = append(statuses, inspectExistingFile(filepath.Join(resolved.Root, "cfgspawnabletypes.xml"), "cfgspawnabletypes", ValidateSpawnableTypesFile)...)
 	statuses = append(statuses, inspectExistingFile(filepath.Join(resolved.Root, "cfgplayerspawnpoints.xml"), "cfgplayerspawnpoints", ValidatePlayerSpawnPointsFile)...)
 	statuses = append(statuses, inspectExistingFile(filepath.Join(resolved.Root, "cfgenvironment.xml"), "cfgenvironment", ValidateEnvironmentFile)...)
+	statuses = append(statuses, inspectRegisteredTerritoryFiles(filepath.Join(resolved.Root, "cfgenvironment.xml"), resolved.Root)...)
 	statuses = append(statuses, inspectExistingFile(filepath.Join(resolved.Root, "cfgEffectArea.json"), "cfgEffectArea", ValidateEffectAreaFile)...)
 	statuses = append(statuses, inspectExistingFile(filepath.Join(resolved.Root, "cfgIgnoreList.xml"), "cfgIgnoreList", ValidateIgnoreListFile)...)
 	addAggregateWarnings(statuses, resolved.Root)
 	return statuses, nil
+}
+
+func inspectRegisteredTerritoryFiles(environmentPath string, missionRoot string) []FileStatus {
+	paths, _, err := environmentFileRefs(environmentPath)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var statuses []FileStatus
+	for _, value := range paths {
+		path := filepath.Clean(filepath.Join(missionRoot, filepath.FromSlash(value)))
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		statuses = append(statuses, inspectExistingFile(path, "territory", ValidateTerritoryFile)...)
+	}
+	return statuses
 }
 
 func ResolveMissionPath(path string) (missionPath, error) {
@@ -113,6 +167,19 @@ func ResolveMissionPath(path string) (missionPath, error) {
 	default:
 		return missionPath{Root: parent, CorePath: cleanPath}, nil
 	}
+}
+
+func ResolveMissionRoot(path string) (string, error) {
+	resolved, err := ResolveMissionPath(path)
+	if err != nil {
+		return "", err
+	}
+	return resolved.Root, nil
+}
+
+func EnvironmentBacksEvent(missionRoot string, eventName string) bool {
+	context, err := loadEnvironmentContext(filepath.Join(missionRoot, "cfgenvironment.xml"), missionRoot)
+	return err == nil && context.backsEvent(eventName)
 }
 
 type statusValidator func(string) ([]string, error)
@@ -162,8 +229,11 @@ func addEventSpawnWarnings(statuses []FileStatus, missionRoot string) {
 			continue
 		}
 		message := fmt.Sprintf("fixed event %q has no matching cfgeventspawns.xml event", event)
-		command := fmt.Sprintf("dzcli create economy event-spawns %s --file %s --pos %s", quotePowerShellArgument(event), quotePowerShellArgument(filepath.Join(missionRoot, "cfgeventspawns.xml")), quotePowerShellArgument("x,z"))
-		appendWarningDetail(statuses, "events", WarningDetail{Message: message, Remediation: []string{command}})
+		appendWarningDetail(statuses, "events", WarningDetail{Message: message, Actions: []RemediationAction{{
+			ID:     "event-spawn-create-" + event,
+			Detail: "input required: provide --pos coordinates or --copy-zone-from a valid event",
+			Class:  RemediationSemantic,
+		}}})
 	}
 }
 
@@ -198,9 +268,9 @@ func addEnvironmentWarnings(statuses []FileStatus, missionRoot string) {
 		if (statErr != nil && errors.Is(statErr, os.ErrNotExist)) || (statErr == nil && !info.Mode().IsRegular()) {
 			appendWarningDetail(statuses, "cfgenvironment", WarningDetail{
 				Message: fmt.Sprintf("references missing territory file %q", path),
-				Remediation: []string{
-					fmt.Sprintf("dzcli update economy environment path %s --file %s --occurrence %d --set-path %s --scaffold", quotePowerShellArgument(path), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml")), pathOccurrences[path], quotePowerShellArgument(path)),
-					fmt.Sprintf("dzcli delete economy environment path %s --file %s --occurrence %d", quotePowerShellArgument(path), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml")), pathOccurrences[path]),
+				Actions: []RemediationAction{
+					{ID: fmt.Sprintf("environment-scaffold-%s-%d", path, pathOccurrences[path]), Command: fmt.Sprintf("dzcli update economy environment path %s --file %s --occurrence %d --set-path %s --scaffold", quotePowerShellArgument(path), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml")), pathOccurrences[path], quotePowerShellArgument(path)), Class: RemediationPlaceholder, AlternativeGroup: "missing-environment-" + path},
+					{ID: fmt.Sprintf("environment-delete-%s-%d", path, pathOccurrences[path]), Command: fmt.Sprintf("dzcli delete economy environment path %s --file %s --occurrence %d", quotePowerShellArgument(path), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml")), pathOccurrences[path]), Class: RemediationDeletion, Destructive: true, AlternativeGroup: "missing-environment-" + path},
 				},
 			})
 		}
@@ -215,7 +285,11 @@ func addEnvironmentWarnings(statuses []FileStatus, missionRoot string) {
 		detail := WarningDetail{Message: fmt.Sprintf("references usable file %q not registered by path", usable)}
 		if len(matches) == 1 {
 			relative, _ := filepath.Rel(missionRoot, matches[0])
-			detail.Remediation = []string{fmt.Sprintf("dzcli create economy environment path %s --file %s", quotePowerShellArgument(filepath.ToSlash(relative)), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml")))}
+			relative = filepath.ToSlash(relative)
+			detail.Actions = []RemediationAction{{
+				ID: "environment-register-" + usable, Command: fmt.Sprintf("dzcli create economy environment path %s --file %s", quotePowerShellArgument(relative), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml"))),
+				Class: RemediationMechanical, AutoApply: true, Operation: RemediationCreateEnvironment, File: filepath.Join(missionRoot, "cfgenvironment.xml"), Name: relative,
+			}}
 		} else {
 			detail.ManualOnly = true
 		}
@@ -257,6 +331,15 @@ func appendWarningDetail(statuses []FileStatus, kind string, warning WarningDeta
 
 func addStatusWarning(status *FileStatus, message string, detail WarningDetail) {
 	detail.Message = message
+	if len(detail.Actions) == 0 {
+		for index, command := range detail.Remediation {
+			detail.Actions = append(detail.Actions, RemediationAction{
+				ID:      fmt.Sprintf("%s-%d", status.Kind, len(status.WarningDetails)+index+1),
+				Command: command,
+				Class:   RemediationSemantic,
+			})
+		}
+	}
 	status.Warnings = append(status.Warnings, message)
 	status.WarningDetails = append(status.WarningDetails, detail)
 }
@@ -377,8 +460,11 @@ func loadEnvironmentContext(path string, missionRoot string) (environmentContext
 				if pathValue := attrValue(typed, "path"); pathValue != "" {
 					fullPath := filepath.Join(missionRoot, filepath.FromSlash(pathValue))
 					if info, statErr := os.Stat(fullPath); statErr == nil && info.Mode().IsRegular() {
+						zoneCount, territoryErr := territoryZoneCountFile(fullPath)
 						base := strings.TrimSuffix(filepath.Base(pathValue), filepath.Ext(pathValue))
-						context.validPaths[base] = true
+						if territoryErr == nil && zoneCount > 0 {
+							context.validPaths[base] = true
+						}
 					}
 				}
 				if usable := attrValue(typed, "usable"); usable != "" && len(stack) > 0 {
@@ -1099,7 +1185,11 @@ func addTypeIdentityWarnings(statuses []FileStatus) {
 			previous, exists := seen[entry.Name]
 			if exists {
 				message := fmt.Sprintf("type %q duplicates a type already loaded from %s", entry.Name, previous.Path)
-				detail := WarningDetail{Message: message, Remediation: []string{fmt.Sprintf("dzcli delete economy types %s --file %s --occurrence %d", quotePowerShellArgument(entry.Name), quotePowerShellArgument(status.Path), fileOccurrences[status.Path+"\x00"+entry.Name])}}
+				occurrence := fileOccurrences[status.Path+"\x00"+entry.Name]
+				detail := WarningDetail{Message: message, Actions: []RemediationAction{{
+					ID: fmt.Sprintf("delete-duplicate-%s-%d", entry.Name, occurrence), Command: fmt.Sprintf("dzcli delete economy types %s --file %s --occurrence %d", quotePowerShellArgument(entry.Name), quotePowerShellArgument(status.Path), occurrence),
+					Class: RemediationDeletion, Destructive: true, AutoApply: true, Operation: RemediationDeleteType, File: status.Path, Name: entry.Name, Occurrence: occurrence,
+				}}}
 				addStatusWarning(status, message, detail)
 				continue
 			}
@@ -2005,6 +2095,85 @@ func validatePlayerSpawnElement(start xml.StartElement, errs *ValidationErrors) 
 			if _, err := strconv.ParseFloat(value, 64); err != nil {
 				addValidationError(errs, "spawn pos %s expected float", name)
 			}
+		}
+	}
+}
+
+func ValidateTerritoryFile(path string) ([]string, error) {
+	count, err := territoryZoneCountFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if count == 0 {
+		return []string{"territory file contains no live spawn zones; scaffold is validation-only"}, nil
+	}
+	return nil, nil
+}
+
+func territoryZoneCountFile(path string) (int, error) {
+	data, err := readConfigFile(path)
+	if err != nil {
+		return 0, fmt.Errorf("read %s: %w", path, err)
+	}
+	return ParseTerritoryData(data, path)
+}
+
+func ParseTerritoryData(data []byte, sourceName string) (int, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	zoneCount := 0
+	var errs ValidationErrors
+	err := walkXMLRoot(decoder, "territory-type", sourceName, func(root xml.StartElement) error {
+		depth := 0
+		territoryDepth := -1
+		for {
+			token, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			switch value := token.(type) {
+			case xml.StartElement:
+				depth++
+				if depth == 1 && value.Name.Local == "territory" {
+					territoryDepth = depth
+				}
+				if value.Name.Local == "zone" && territoryDepth >= 0 && depth == territoryDepth+1 {
+					validateTerritoryZone(value, zoneCount+1, &errs)
+					zoneCount++
+				}
+			case xml.EndElement:
+				if value.Name.Local == root.Name.Local && depth == 0 {
+					return nil
+				}
+				if value.Name.Local == "territory" && depth == territoryDepth {
+					territoryDepth = -1
+				}
+				depth--
+			}
+		}
+	})
+	if err != nil {
+		return 0, err
+	}
+	return zoneCount, validationErrorsOrNil(errs)
+}
+
+func validateTerritoryZone(start xml.StartElement, occurrence int, errs *ValidationErrors) {
+	if strings.TrimSpace(attrValue(start, "name")) == "" {
+		addValidationError(errs, "territory zone %d missing name", occurrence)
+	}
+	for _, name := range []string{"smin", "smax", "dmin", "dmax", "x", "z", "r"} {
+		value := strings.TrimSpace(attrValue(start, name))
+		if value == "" {
+			addValidationError(errs, "territory zone %d missing %s", occurrence, name)
+			continue
+		}
+		number, err := strconv.ParseFloat(value, 64)
+		if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
+			addValidationError(errs, "territory zone %d %s expected finite float", occurrence, name)
+			continue
+		}
+		if name == "r" && number <= 0 {
+			addValidationError(errs, "territory zone %d r must be greater than 0", occurrence)
 		}
 	}
 }

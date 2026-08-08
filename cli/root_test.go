@@ -219,13 +219,14 @@ func TestNewRootCommandMetadata(t *testing.T) {
 	command := NewRootCommand(&bytes.Buffer{}, &bytes.Buffer{})
 
 	assertEqual(t, command.Use, "dzcli")
-	if len(command.Commands()) != 6 {
-		t.Fatalf("root command count = %d, want 6", len(command.Commands()))
+	if len(command.Commands()) != 7 {
+		t.Fatalf("root command count = %d, want 7", len(command.Commands()))
 	}
 	uses := commandUses(command.Commands())
 	assertContains(t, uses, "create")
 	assertContains(t, uses, "delete")
 	assertContains(t, uses, "get")
+	assertContains(t, uses, "fix")
 	assertContains(t, uses, "update")
 	assertContains(t, uses, "validate")
 	assertContains(t, uses, "version")

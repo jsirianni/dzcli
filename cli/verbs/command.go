@@ -11,6 +11,7 @@ import (
 	"text/tabwriter"
 
 	initvalidate "dzcli/cli/dayzinit/validate"
+	economyfixcmd "dzcli/cli/economy/fix"
 	"dzcli/cli/economy/limits"
 	"dzcli/cli/economy/remediation"
 	typedelete "dzcli/cli/economy/types/delete"
@@ -67,6 +68,13 @@ func NewDeleteCommand(stdin io.Reader, stdout io.Writer) *cobra.Command {
 	command.AddCommand(newExpansionParent(stdout, newAIParent(stdout, patrols.NewDeleteCommand(stdout), loadouts.NewDeleteCommandWithInput(stdin, stdout))))
 	command.AddCommand(serverconfigcmd.NewDeleteCommand(stdout))
 	command.AddCommand(servergameplaycmd.NewDeleteCommand(stdout))
+	return command
+}
+
+func NewFixCommand(stdout io.Writer) *cobra.Command {
+	command := newParent("fix", "Plan or apply DayZ configuration remediation")
+	command.SetOut(stdout)
+	command.AddCommand(economyfixcmd.NewCommand(stdout))
 	return command
 }
 
