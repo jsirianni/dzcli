@@ -1,4 +1,4 @@
-.PHONY: all install-tools test lint revive security gosec
+.PHONY: all install-tools test lint revive security gosec gendocs
 
 ifeq ($(OS),Windows_NT)
 NULL_DEVICE := NUL
@@ -26,3 +26,6 @@ security: gosec
 
 gosec:
 	go tool gosec ./...
+
+gendocs:
+	go run ./cmd/gendocs
