@@ -108,7 +108,7 @@ func FindXMLFiles(path string) ([]string, error) {
 }
 
 func ParseGenericXMLFile(path string) error {
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- dzcli intentionally reads user-provided XML paths.
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}

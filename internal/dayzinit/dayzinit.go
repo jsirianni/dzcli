@@ -33,7 +33,7 @@ func validateFile(filename string, stat func(string) (os.FileInfo, error), read 
 }
 
 func readRegularFile(filename string) ([]byte, error) {
-	file, err := os.Open(filename)
+	file, err := os.Open(filename) // #nosec G304 -- dzcli intentionally reads user-provided DayZ init paths.
 	if err != nil {
 		return nil, err
 	}

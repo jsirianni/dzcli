@@ -1,0 +1,27 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-tooling:
+        patterns:
+          - "github.com/mgechev/*"
+          - "github.com/securego/gosec/v2*"
+      cobra:
+        patterns:
+          - "github.com/spf13/*"
+      golang-x:
+        patterns:
+          - "golang.org/x/*"
+      google:
+        patterns:
+          - "google.golang.org/*"
+          - "cloud.google.com/*"

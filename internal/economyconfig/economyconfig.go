@@ -29,6 +29,10 @@ func (errs ValidationErrors) Error() string {
 	return strings.Join(errs, "; ")
 }
 
+func readConfigFile(path string) ([]byte, error) {
+	return os.ReadFile(path) // #nosec G304 -- dzcli intentionally reads user-provided DayZ config paths.
+}
+
 type missionPath struct {
 	Root     string
 	CorePath string
@@ -282,7 +286,7 @@ type TypeFileRef struct {
 }
 
 func ParseEconomyCoreFile(path string) (EconomyCore, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return EconomyCore{}, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -679,7 +683,7 @@ func readOnlyNameAttribute(start xml.StartElement) (string, error) {
 }
 
 func ParseTypesFile(path string) (TypesFile, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return TypesFile{}, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -829,7 +833,7 @@ func LoadLimitsDefinitions(missionDir string) (LimitsDefinition, error) {
 }
 
 func ParseLimitsDefinitionFile(path string) (LimitsDefinition, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return LimitsDefinition{}, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -855,7 +859,7 @@ func ParseLimitsDefinitionData(data []byte, sourceName string) (LimitsDefinition
 }
 
 func AppendUserLimitsDefinitionFile(path string, limits *LimitsDefinition) error {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}
@@ -899,7 +903,7 @@ func addNamedFields(target map[string]bool, fields []NamedField) {
 }
 
 func ValidateGlobalsFile(path string) ([]string, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -1013,7 +1017,7 @@ func ValidateEventsFile(path string) ([]string, error) {
 }
 
 func eventPositions(path string) (map[string]string, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -1168,7 +1172,7 @@ func validateEventChildAttributes(start xml.StartElement, eventName string, errs
 }
 
 func ValidateMessagesFile(path string) ([]string, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -1254,7 +1258,7 @@ func ValidateEventSpawnsFile(path string) ([]string, error) {
 }
 
 func eventSpawnNames(path string) (map[string]bool, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -1352,7 +1356,7 @@ func ValidateRandomPresetsFile(path string) ([]string, error) {
 }
 
 func randomPresetNames(path string) (map[string]bool, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -1442,7 +1446,7 @@ func ValidateSpawnableTypesFile(path string) ([]string, error) {
 }
 
 func spawnablePresetRefs(path string) (map[string]bool, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -1590,7 +1594,7 @@ func validateSpawnableItem(start xml.StartElement, typeName string, errs *Valida
 }
 
 func ValidatePlayerSpawnPointsFile(path string) ([]string, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -1660,7 +1664,7 @@ func ValidateEnvironmentFile(path string) ([]string, error) {
 }
 
 func environmentFileRefs(path string) ([]string, map[string]bool, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -1727,7 +1731,7 @@ func validateEnvironmentElement(start xml.StartElement, paths *[]string, usables
 }
 
 func ValidateEffectAreaFile(path string) ([]string, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -1806,7 +1810,7 @@ func validateEffectAreaPlayerData(value any, index int, errs *ValidationErrors) 
 }
 
 func ValidateIgnoreListFile(path string) ([]string, error) {
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}

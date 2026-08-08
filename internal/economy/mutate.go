@@ -357,7 +357,7 @@ func readMutableFile(path string) ([]byte, fs.FileMode, error) {
 	if err != nil {
 		return nil, 0, fmt.Errorf("stat %s: %w", path, err)
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- dzcli intentionally reads user-provided DayZ config paths.
 	if err != nil {
 		return nil, 0, fmt.Errorf("read %s: %w", path, err)
 	}
