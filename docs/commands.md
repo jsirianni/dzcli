@@ -21,6 +21,7 @@ dzcli
 | `get` | List DayZ configuration resources |
 | `update` | Update DayZ configuration resources |
 | `validate` | Validate DayZ configuration files |
+| `version` | Print dzcli version |
 
 ## dzcli create
 
@@ -1407,5 +1408,15 @@ Validate XML files recursively
 
 ```text
 dzcli validate xml [path]
+```
+
+## dzcli version
+
+Print dzcli version
+
+### Usage
+
+```text
+dzcli version
 ```
 

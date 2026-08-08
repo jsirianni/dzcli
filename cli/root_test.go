@@ -37,6 +37,7 @@ func TestRunWithoutCommandShowsRootHelp(t *testing.T) {
 	assertContains(t, stdout.String(), "get")
 	assertContains(t, stdout.String(), "update")
 	assertContains(t, stdout.String(), "validate")
+	assertContains(t, stdout.String(), "version")
 }
 
 func TestRunReturnsUnknownCommandFailure(t *testing.T) {
@@ -59,6 +60,31 @@ func TestRunReturnsMissingValidateArgumentFailure(t *testing.T) {
 	assertEqual(t, code, FailureExitCode)
 	assertEqual(t, stdout.String(), "")
 	assertContains(t, stderr.String(), "accepts 1 arg(s), received 0")
+}
+
+func TestRunVersionCommandPrintsDefaultVersion(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"version"}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stdout.String(), "unknown\n")
+	assertEqual(t, stderr.String(), "")
+}
+
+func TestRunVersionCommandPrintsInjectedVersion(t *testing.T) {
+	originalVersion := version
+	t.Cleanup(func() { version = originalVersion })
+	version = "1.2.3"
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"version"}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stdout.String(), "1.2.3\n")
+	assertEqual(t, stderr.String(), "")
 }
 
 func TestRunReportsEconomyCoreParseFailure(t *testing.T) {
@@ -193,8 +219,8 @@ func TestNewRootCommandMetadata(t *testing.T) {
 	command := NewRootCommand(&bytes.Buffer{}, &bytes.Buffer{})
 
 	assertEqual(t, command.Use, "dzcli")
-	if len(command.Commands()) != 5 {
-		t.Fatalf("root command count = %d, want 5", len(command.Commands()))
+	if len(command.Commands()) != 6 {
+		t.Fatalf("root command count = %d, want 6", len(command.Commands()))
 	}
 	uses := commandUses(command.Commands())
 	assertContains(t, uses, "create")
@@ -202,6 +228,7 @@ func TestNewRootCommandMetadata(t *testing.T) {
 	assertContains(t, uses, "get")
 	assertContains(t, uses, "update")
 	assertContains(t, uses, "validate")
+	assertContains(t, uses, "version")
 }
 
 func TestOldNounFirstCommandsFail(t *testing.T) {
