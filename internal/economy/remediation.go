@@ -39,6 +39,13 @@ type EventSpawnEntry struct {
 	Occurrence int
 	Positions  []EventSpawnPosition
 	Zones      []EventSpawnZone
+	Issues     []string
+}
+
+type EventSpawnCreateOptions struct {
+	Name      string
+	Positions []EventSpawnPosition
+	Zones     []EventSpawnZone
 }
 
 type EconomyEventEntry struct {
@@ -59,6 +66,8 @@ type EventSpawnUpdateOptions struct {
 	AddPositions    []EventSpawnPosition
 	RemovePositions []int
 	SetZone         *EventSpawnZone
+	SetZones        []EventSpawnZone
+	SetZonesSet     bool
 	RemoveZone      bool
 }
 
@@ -66,9 +75,29 @@ type EnvironmentReference struct {
 	Kind                string
 	Value               string
 	Territory           string
+	TerritoryType       string
 	Occurrence          int
 	TerritoryOccurrence int
 	Exists              bool
+}
+
+type TerritoryZone struct {
+	Name string
+	SMin string
+	SMax string
+	DMin string
+	DMax string
+	X    string
+	Z    string
+	R    string
+}
+
+type TerritoryScaffoldOptions struct {
+	Template      bool
+	OwnerName     string
+	OwnerType     string
+	SuggestedName string
+	Zones         []TerritoryZone
 }
 
 type EnvironmentReferenceOptions struct {
@@ -121,6 +150,36 @@ func ParseEventSpawnZone(value string) (EventSpawnZone, error) {
 		}
 	}
 	return EventSpawnZone{SMin: parts[0], SMax: parts[1], DMin: parts[2], DMax: parts[3], R: parts[4]}, nil
+}
+
+func ParseTerritoryZone(value string) (TerritoryZone, error) {
+	parts := splitCSV(value)
+	if len(parts) != 8 {
+		return TerritoryZone{}, fmt.Errorf("territory zone expected name,smin,smax,dmin,dmax,x,z,r, got %q", value)
+	}
+	if parts[0] == "" {
+		return TerritoryZone{}, fmt.Errorf("territory zone name is required")
+	}
+	for _, part := range parts[1:] {
+		if !isFiniteNumber(part) {
+			return TerritoryZone{}, fmt.Errorf("territory zone value %q is not a number", part)
+		}
+	}
+	radius, _ := strconv.ParseFloat(parts[7], 64)
+	if radius <= 0 {
+		return TerritoryZone{}, fmt.Errorf("territory zone radius must be greater than 0")
+	}
+	return TerritoryZone{Name: parts[0], SMin: parts[1], SMax: parts[2], DMin: parts[3], DMax: parts[4], X: parts[5], Z: parts[6], R: parts[7]}, nil
+}
+
+func IsPlaceholderEventSpawnZone(zone EventSpawnZone) bool {
+	for _, value := range []string{zone.SMin, zone.SMax, zone.DMin, zone.DMax, zone.R} {
+		number, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil || number != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func splitCSV(value string) []string {
@@ -177,7 +236,7 @@ func ListEconomyEventsFile(path string) ([]EconomyEventEntry, error) {
 }
 
 func ParseEventSpawnEntriesData(data []byte, sourceName string) ([]EventSpawnEntry, error) {
-	if _, err := economyconfig.ParseEventSpawnsData(data, sourceName); err != nil {
+	if err := validateEventSpawnStructure(data, sourceName); err != nil {
 		return nil, err
 	}
 	ranges, err := findDirectNamedChildRanges(data, "event", "", "")
@@ -202,9 +261,79 @@ func ParseEventSpawnEntriesData(data []byte, sourceName string) ([]EventSpawnEnt
 		if err := decodeEventSpawnEntry(decoder, start, &entry); err != nil {
 			return nil, err
 		}
+		entry.Issues = eventSpawnEntryIssues(entry)
 		entries = append(entries, entry)
 	}
 	return entries, nil
+}
+
+func validateEventSpawnStructure(data []byte, sourceName string) error {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	rootSeen := false
+	depth := 0
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			if !rootSeen || depth != 0 {
+				return fmt.Errorf("parse %s: expected eventposdef root", sourceName)
+			}
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("parse %s: %w", sourceName, err)
+		}
+		switch value := token.(type) {
+		case xml.StartElement:
+			if depth == 0 {
+				if rootSeen || value.Name.Local != "eventposdef" {
+					return fmt.Errorf("parse %s: expected eventposdef root", sourceName)
+				}
+				rootSeen = true
+			}
+			depth++
+		case xml.EndElement:
+			depth--
+		case xml.CharData:
+			if depth == 0 && strings.TrimSpace(string(value)) != "" {
+				return fmt.Errorf("parse %s: unexpected text outside eventposdef root", sourceName)
+			}
+		}
+	}
+}
+
+func eventSpawnEntryIssues(entry EventSpawnEntry) []string {
+	var issues []string
+	if strings.TrimSpace(entry.Name) == "" {
+		issues = append(issues, "missing name")
+	}
+	if len(entry.Positions) == 0 && len(entry.Zones) == 0 {
+		issues = append(issues, "requires at least one pos or zone")
+	}
+	for index, position := range entry.Positions {
+		for _, field := range []struct{ name, value string }{{"x", position.X}, {"z", position.Z}} {
+			if strings.TrimSpace(field.value) == "" {
+				issues = append(issues, fmt.Sprintf("pos %d missing %s", index+1, field.name))
+			} else if !isFiniteNumber(strings.TrimSpace(field.value)) {
+				issues = append(issues, fmt.Sprintf("pos %d %s expected float", index+1, field.name))
+			}
+		}
+		for _, field := range []struct{ name, value string }{{"a", position.A}, {"y", position.Y}} {
+			if strings.TrimSpace(field.value) != "" && !isFiniteNumber(strings.TrimSpace(field.value)) {
+				issues = append(issues, fmt.Sprintf("pos %d %s expected float", index+1, field.name))
+			}
+		}
+	}
+	for index, zone := range entry.Zones {
+		for _, field := range []struct{ name, value string }{{"smin", zone.SMin}, {"smax", zone.SMax}, {"dmin", zone.DMin}, {"dmax", zone.DMax}, {"r", zone.R}} {
+			value := strings.TrimSpace(field.value)
+			if value == "" {
+				issues = append(issues, fmt.Sprintf("zone %d missing %s", index+1, field.name))
+			} else if !isFiniteNumber(value) {
+				issues = append(issues, fmt.Sprintf("zone %d %s expected float", index+1, field.name))
+			}
+		}
+	}
+	return issues
 }
 
 func decodeEventSpawnEntry(decoder *xml.Decoder, root xml.StartElement, entry *EventSpawnEntry) error {
@@ -233,19 +362,38 @@ func decodeEventSpawnEntry(decoder *xml.Decoder, root xml.StartElement, entry *E
 }
 
 func CreateEventSpawnFile(path string, name string, positions []EventSpawnPosition, zone *EventSpawnZone) (FileMutation, error) {
+	zones := []EventSpawnZone(nil)
+	if zone != nil {
+		zones = append(zones, *zone)
+	}
+	return CreateEventSpawnFileWithOptions(path, EventSpawnCreateOptions{Name: name, Positions: positions, Zones: zones})
+}
+
+func CreateEventSpawnFileWithOptions(path string, options EventSpawnCreateOptions) (FileMutation, error) {
 	data, mode, err := readMutableFile(path)
 	if err != nil {
 		return FileMutation{}, err
 	}
-	updated, changed, err := CreateEventSpawnXML(data, name, positions, zone)
-	return FileMutation{Data: updated, Mode: mode, Changed: changed}, err
+	updated, changed, err := CreateEventSpawnXMLWithOptions(data, options)
+	if err != nil {
+		return FileMutation{}, err
+	}
+	return cleanFileMutation(data, updated, mode, changed), nil
 }
 
 func CreateEventSpawnXML(data []byte, name string, positions []EventSpawnPosition, zone *EventSpawnZone) ([]byte, bool, error) {
-	if strings.TrimSpace(name) == "" {
+	zones := []EventSpawnZone(nil)
+	if zone != nil {
+		zones = append(zones, *zone)
+	}
+	return CreateEventSpawnXMLWithOptions(data, EventSpawnCreateOptions{Name: name, Positions: positions, Zones: zones})
+}
+
+func CreateEventSpawnXMLWithOptions(data []byte, options EventSpawnCreateOptions) ([]byte, bool, error) {
+	if strings.TrimSpace(options.Name) == "" {
 		return nil, false, fmt.Errorf("event name is required")
 	}
-	if len(positions) == 0 && zone == nil {
+	if len(options.Positions) == 0 && len(options.Zones) == 0 {
 		return nil, false, fmt.Errorf("event spawn requires at least one --pos or --zone")
 	}
 	entries, err := ParseEventSpawnEntriesData(data, "cfgeventspawns.xml")
@@ -253,23 +401,75 @@ func CreateEventSpawnXML(data []byte, name string, positions []EventSpawnPositio
 		return nil, false, err
 	}
 	for _, entry := range entries {
-		if entry.Name == name {
-			return nil, false, fmt.Errorf("event spawn %q already exists", name)
+		if entry.Name == options.Name {
+			return nil, false, fmt.Errorf("event spawn %q already exists", options.Name)
 		}
 	}
 	root, err := findElementRange(data, "eventposdef")
 	if err != nil {
 		return nil, false, err
 	}
-	rendered := renderEventSpawn(data, root, name, positions, zone)
+	rendered := renderEventSpawn(data, root, options.Name, options.Positions, options.Zones)
 	updated, err := insertBeforeElementClose(data, root, rendered)
 	if err != nil {
 		return nil, false, err
 	}
-	if _, err := ParseEventSpawnEntriesData(updated, "cfgeventspawns.xml"); err != nil {
+	if err := validateEventSpawnStructure(updated, "cfgeventspawns.xml"); err != nil {
 		return nil, false, err
 	}
+	parsed, err := ParseEventSpawnEntriesData(wrapEventSpawnBlock(rendered), "cfgeventspawns.xml")
+	if err != nil || len(parsed) != 1 || len(parsed[0].Issues) > 0 {
+		if err != nil {
+			return nil, false, err
+		}
+		return nil, false, fmt.Errorf("created event spawn is invalid: %s", strings.Join(parsed[0].Issues, "; "))
+	}
 	return updated, true, nil
+}
+
+func EventSpawnZonesFile(path string, name string, occurrence int, occurrenceSet bool) ([]EventSpawnZone, error) {
+	data, err := readConfig(path)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := ParseEventSpawnEntriesData(data, path)
+	if err != nil {
+		return nil, err
+	}
+	var matches []EventSpawnEntry
+	for _, entry := range entries {
+		if entry.Name == name {
+			matches = append(matches, entry)
+		}
+	}
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("event %q not found", name)
+	}
+	if len(matches) > 1 && !occurrenceSet {
+		return nil, fmt.Errorf("event %q appears %d times; use --source-occurrence to select one", name, len(matches))
+	}
+	index := 0
+	if occurrenceSet {
+		if occurrence < 1 || occurrence > len(matches) {
+			return nil, fmt.Errorf("event %q source occurrence %d not found", name, occurrence)
+		}
+		index = occurrence - 1
+	}
+	entry := matches[index]
+	if len(entry.Zones) == 0 {
+		return nil, fmt.Errorf("event %q has no zones to copy", name)
+	}
+	for _, issue := range entry.Issues {
+		if strings.HasPrefix(issue, "zone ") {
+			return nil, fmt.Errorf("event %q has invalid zones: %s", name, issue)
+		}
+	}
+	for _, zone := range entry.Zones {
+		if IsPlaceholderEventSpawnZone(zone) {
+			return nil, fmt.Errorf("event %q contains an all-zero placeholder zone; copy requires meaningful source zones", name)
+		}
+	}
+	return append([]EventSpawnZone(nil), entry.Zones...), nil
 }
 
 func UpdateEventSpawnFile(path string, options EventSpawnUpdateOptions) (FileMutation, error) {
@@ -278,7 +478,10 @@ func UpdateEventSpawnFile(path string, options EventSpawnUpdateOptions) (FileMut
 		return FileMutation{}, err
 	}
 	updated, changed, err := UpdateEventSpawnXML(data, options)
-	return FileMutation{Data: updated, Mode: mode, Changed: changed}, err
+	if err != nil {
+		return FileMutation{}, err
+	}
+	return cleanFileMutation(data, updated, mode, changed), nil
 }
 
 func UpdateEventSpawnXML(data []byte, options EventSpawnUpdateOptions) ([]byte, bool, error) {
@@ -314,6 +517,12 @@ func UpdateEventSpawnXML(data []byte, options EventSpawnUpdateOptions) ([]byte, 
 			block, err = insertEventChildren(block, renderZoneLines(block, *options.SetZone))
 		}
 	}
+	if err == nil && options.SetZonesSet {
+		block, err = removeChildElements(block, "zone", nil)
+		if err == nil {
+			block, err = insertEventChildren(block, renderZoneListLines(block, options.SetZones))
+		}
+	}
 	if err != nil {
 		return nil, false, err
 	}
@@ -324,10 +533,19 @@ func UpdateEventSpawnXML(data []byte, options EventSpawnUpdateOptions) ([]byte, 
 		}
 		return nil, false, err
 	}
-	if len(parsed) != 1 || (len(parsed[0].Positions) == 0 && len(parsed[0].Zones) == 0) {
-		return nil, false, fmt.Errorf("event spawn cannot be empty")
+	if len(parsed) != 1 {
+		return nil, false, fmt.Errorf("updated event spawn could not be identified")
+	}
+	if len(parsed[0].Issues) > 0 {
+		if len(parsed[0].Issues) == 1 && parsed[0].Issues[0] == "requires at least one pos or zone" {
+			return nil, false, fmt.Errorf("event spawn cannot be empty")
+		}
+		return nil, false, fmt.Errorf("updated event spawn is invalid: %s", strings.Join(parsed[0].Issues, "; "))
 	}
 	updated := replaceRange(data, target.Start, target.End, block)
+	if err := validateEventSpawnStructure(updated, "cfgeventspawns.xml"); err != nil {
+		return nil, false, err
+	}
 	return updated, !bytes.Equal(data, updated), nil
 }
 
@@ -337,11 +555,14 @@ func DeleteEventSpawnFile(path string, name string, occurrence int, occurrenceSe
 		return FileMutation{}, err
 	}
 	updated, changed, err := DeleteEventSpawnXML(data, name, occurrence, occurrenceSet)
-	return FileMutation{Data: updated, Mode: mode, Changed: changed}, err
+	if err != nil {
+		return FileMutation{}, err
+	}
+	return cleanFileMutation(data, updated, mode, changed), nil
 }
 
 func DeleteEventSpawnXML(data []byte, name string, occurrence int, occurrenceSet bool) ([]byte, bool, error) {
-	if _, err := ParseEventSpawnEntriesData(data, "cfgeventspawns.xml"); err != nil {
+	if err := validateEventSpawnStructure(data, "cfgeventspawns.xml"); err != nil {
 		return nil, false, err
 	}
 	target, err := selectDirectNamedRange(data, "event", "name", name, occurrence, occurrenceSet)
@@ -349,10 +570,14 @@ func DeleteEventSpawnXML(data []byte, name string, occurrence int, occurrenceSet
 		return nil, false, err
 	}
 	start, end := expandWholeLine(data, target.Start, target.End)
-	return replaceRange(data, start, end, nil), true, nil
+	updated := replaceRange(data, start, end, nil)
+	if err := validateEventSpawnStructure(updated, "cfgeventspawns.xml"); err != nil {
+		return nil, false, err
+	}
+	return updated, true, nil
 }
 
-func renderEventSpawn(document []byte, root elementRange, name string, positions []EventSpawnPosition, zone *EventSpawnZone) []byte {
+func renderEventSpawn(document []byte, root elementRange, name string, positions []EventSpawnPosition, zones []EventSpawnZone) []byte {
 	lineEnding := detectLineEnding(document)
 	indent := detectElementIndent(document, root.Start) + "  "
 	childIndent := indent + "  "
@@ -361,8 +586,8 @@ func renderEventSpawn(document []byte, root elementRange, name string, positions
 	for _, position := range positions {
 		output.WriteString(childIndent + renderPosition(position) + lineEnding)
 	}
-	if zone != nil {
-		output.WriteString(childIndent + renderZone(*zone) + lineEnding)
+	for _, zone := range zones {
+		output.WriteString(childIndent + renderZone(zone) + lineEnding)
 	}
 	output.WriteString(indent + "</event>")
 	return []byte(output.String())
@@ -395,6 +620,14 @@ func renderPositionLines(block []byte, positions []EventSpawnPosition) []byte {
 
 func renderZoneLines(block []byte, zone EventSpawnZone) []byte {
 	return []byte(detectChildIndent(block, "  ") + renderZone(zone) + detectLineEnding(block))
+}
+
+func renderZoneListLines(block []byte, zones []EventSpawnZone) []byte {
+	var output []byte
+	for _, zone := range zones {
+		output = append(output, renderZoneLines(block, zone)...)
+	}
+	return output
 }
 
 func insertEventChildren(block []byte, children []byte) ([]byte, error) {
@@ -442,6 +675,7 @@ func ParseEnvironmentReferencesData(data []byte, sourceName string, missionRoot 
 	decoder := xml.NewDecoder(bytes.NewReader(data))
 	type territoryState struct {
 		Name       string
+		Type       string
 		Occurrence int
 		Depth      int
 	}
@@ -464,7 +698,7 @@ func ParseEnvironmentReferencesData(data []byte, sourceName string, missionRoot 
 			if typed.Name.Local == "territory" {
 				name := territoryName(typed)
 				territoryCounts[name]++
-				stack = append(stack, territoryState{Name: name, Occurrence: territoryCounts[name], Depth: depth})
+				stack = append(stack, territoryState{Name: name, Type: attributeValue(typed, "type"), Occurrence: territoryCounts[name], Depth: depth})
 			}
 			if typed.Name.Local != "file" {
 				continue
@@ -477,12 +711,12 @@ func ParseEnvironmentReferencesData(data []byte, sourceName string, missionRoot 
 				key := "path\x00" + value
 				refCounts[key]++
 				info, statErr := os.Stat(filepath.Join(missionRoot, filepath.FromSlash(value)))
-				refs = append(refs, EnvironmentReference{Kind: "path", Value: value, Territory: owner.Name, Occurrence: refCounts[key], TerritoryOccurrence: owner.Occurrence, Exists: statErr == nil && info.Mode().IsRegular()})
+				refs = append(refs, EnvironmentReference{Kind: "path", Value: value, Territory: owner.Name, TerritoryType: owner.Type, Occurrence: refCounts[key], TerritoryOccurrence: owner.Occurrence, Exists: statErr == nil && info.Mode().IsRegular()})
 			}
 			if value := attributeValue(typed, "usable"); value != "" {
 				key := "usable\x00" + owner.Name + "\x00" + value
 				refCounts[key]++
-				refs = append(refs, EnvironmentReference{Kind: "usable", Value: value, Territory: owner.Name, Occurrence: refCounts[key], TerritoryOccurrence: owner.Occurrence})
+				refs = append(refs, EnvironmentReference{Kind: "usable", Value: value, Territory: owner.Name, TerritoryType: owner.Type, Occurrence: refCounts[key], TerritoryOccurrence: owner.Occurrence})
 			}
 		case xml.EndElement:
 			if len(stack) > 0 && stack[len(stack)-1].Depth == depth && typed.Name.Local == "territory" {
@@ -499,7 +733,10 @@ func UpdateEnvironmentFile(path string, action EnvironmentAction, options Enviro
 		return FileMutation{}, err
 	}
 	updated, changed, err := UpdateEnvironmentXML(data, action, options)
-	return FileMutation{Data: updated, Mode: mode, Changed: changed}, err
+	if err != nil {
+		return FileMutation{}, err
+	}
+	return cleanFileMutation(data, updated, mode, changed), nil
 }
 
 func UpdateEnvironmentXML(data []byte, action EnvironmentAction, options EnvironmentReferenceOptions) ([]byte, bool, error) {
@@ -670,6 +907,10 @@ func ScaffoldTerritoryFile(missionRoot string, value string) error {
 }
 
 func ScaffoldTerritoryFileWithResult(missionRoot string, value string) (string, bool, error) {
+	return ScaffoldTerritoryFileWithOptions(missionRoot, value, TerritoryScaffoldOptions{})
+}
+
+func ScaffoldTerritoryFileWithOptions(missionRoot string, value string, options TerritoryScaffoldOptions) (string, bool, error) {
 	target, err := ValidateEnvironmentRelativePath(missionRoot, value)
 	if err != nil {
 		return "", false, err
@@ -685,7 +926,7 @@ func ScaffoldTerritoryFileWithResult(missionRoot string, value string) (string, 
 	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 		return "", false, fmt.Errorf("create territory directory: %w", err)
 	}
-	data := []byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<territory-type />\n")
+	data := renderTerritoryScaffold(value, options)
 	file, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- target is validated to remain within the mission root.
 	if err != nil {
 		if os.IsExist(err) {
@@ -706,6 +947,78 @@ func ScaffoldTerritoryFileWithResult(missionRoot string, value string) (string, 
 		return "", false, fmt.Errorf("close territory file: %w", err)
 	}
 	return target, true, nil
+}
+
+func InferTerritoryScaffoldOwner(environmentPath string, value string) (string, string, string, error) {
+	data, err := readConfig(environmentPath)
+	if err != nil {
+		return "", "", "", err
+	}
+	refs, err := ParseEnvironmentReferencesData(data, environmentPath, filepath.Dir(filepath.Clean(environmentPath)))
+	if err != nil {
+		return "", "", "", err
+	}
+	base := strings.TrimSuffix(filepath.Base(value), filepath.Ext(value))
+	var matches []EnvironmentReference
+	for _, ref := range refs {
+		if ref.Kind == "usable" && ref.Value == base {
+			matches = append(matches, ref)
+		}
+	}
+	ownerName := ""
+	ownerType := ""
+	if len(matches) == 1 {
+		ownerName = matches[0].Territory
+		ownerType = matches[0].TerritoryType
+	}
+	suggested := ownerName
+	for _, prefix := range []string{"Ambient", "Animal"} {
+		suggested = strings.TrimPrefix(suggested, prefix)
+	}
+	if suggested == "" {
+		suggested = strings.TrimSuffix(base, "_territories")
+	}
+	if suggested == "" {
+		suggested = "Territory"
+	}
+	return ownerName, ownerType, "Zone_" + suggested, nil
+}
+
+func renderTerritoryScaffold(value string, options TerritoryScaffoldOptions) []byte {
+	if !options.Template {
+		return []byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<territory-type />\n")
+	}
+	suggested := options.SuggestedName
+	if suggested == "" {
+		base := strings.TrimSuffix(filepath.Base(value), filepath.Ext(value))
+		suggested = "Zone_" + strings.TrimSuffix(base, "_territories")
+	}
+	owner := "owner could not be inferred from cfgenvironment.xml"
+	if options.OwnerName != "" {
+		owner = fmt.Sprintf("owner inferred from cfgenvironment.xml: name=%q", options.OwnerName)
+		if options.OwnerType != "" {
+			owner += fmt.Sprintf(" type=%q", options.OwnerType)
+		}
+	}
+	owner = strings.ReplaceAll(owner, "--", "-")
+	var output strings.Builder
+	output.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<territory-type>\n")
+	output.WriteString("  <!-- " + owner + " -->\n")
+	output.WriteString("  <territory>\n")
+	if len(options.Zones) == 0 {
+		output.WriteString("    <!-- Example only; replace coordinates and review counts/radius before uncommenting. -->\n")
+		output.WriteString("    <!-- <zone name=\"" + escapeAttribute(suggested) + "\" smin=\"0\" smax=\"0\" dmin=\"0\" dmax=\"2\" x=\"REPLACE_X\" z=\"REPLACE_Z\" r=\"50\" /> -->\n")
+	} else {
+		for _, zone := range options.Zones {
+			output.WriteString("    " + renderTerritoryZone(zone) + "\n")
+		}
+	}
+	output.WriteString("  </territory>\n</territory-type>\n")
+	return []byte(output.String())
+}
+
+func renderTerritoryZone(zone TerritoryZone) string {
+	return `<zone name="` + escapeAttribute(zone.Name) + `" smin="` + escapeAttribute(zone.SMin) + `" smax="` + escapeAttribute(zone.SMax) + `" dmin="` + escapeAttribute(zone.DMin) + `" dmax="` + escapeAttribute(zone.DMax) + `" x="` + escapeAttribute(zone.X) + `" z="` + escapeAttribute(zone.Z) + `" r="` + escapeAttribute(zone.R) + `" />`
 }
 
 func findNamedElementRanges(data []byte, elementName string, attributeName string, value string) ([]elementRange, error) {

@@ -25,6 +25,7 @@ func TestVerbCommandMetadataAndHelp(t *testing.T) {
 		{name: "create", command: NewCreateCommand(&bytes.Buffer{}), want: "expansion"},
 		{name: "update", command: NewUpdateCommand(strings.NewReader(""), &bytes.Buffer{}), want: "economy"},
 		{name: "delete", command: NewDeleteCommand(strings.NewReader(""), &bytes.Buffer{}), want: "expansion"},
+		{name: "fix", command: NewFixCommand(&bytes.Buffer{}), want: "economy"},
 		{name: "validate", command: NewValidateCommand(&bytes.Buffer{}), want: "init"},
 	}
 

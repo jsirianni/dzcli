@@ -32,6 +32,10 @@ Generated remediation commands single-quote dynamic values and paths so mission 
 
 For fixed events, validation requires an explicit `cfgeventspawns.xml` entry unless the event is disabled with `<active>0</active>` or a matching environment territory supplies spawn data through a registered, existing usable file. Matching is case-sensitive and also recognizes one leading `Animal` or `Ambient` prefix.
 
+Registered territory XML is also inspected. A valid live zone requires the standard `territory-type/territory/zone` structure, a non-empty zone name, finite `smin`, `smax`, `dmin`, `dmax`, `x`, `z`, and `r` values, and a positive radius. Empty/minimal territory scaffolds remain structurally valid but produce a validation-only warning and do not count as gameplay spawn coverage.
+
+Use `dzcli fix economy <mission-root>` to preview warnings as an ordered, classified remediation plan. `--apply` performs only unambiguous mechanical actions; deterministic deletions require the additional `--allow-destructive` flag. Semantic choices, alternative fixes, and placeholders remain unresolved and cause an apply run to return non-zero after revalidation.
+
 ## XML
 
 Validate XML files recursively from the current directory:

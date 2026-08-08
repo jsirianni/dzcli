@@ -131,7 +131,7 @@ func UpdateTypesFile(path string, options TypeUpdateOptions) (FileMutation, erro
 	if err != nil {
 		return FileMutation{}, err
 	}
-	return FileMutation{Data: updated, Mode: mode, Changed: changed}, nil
+	return cleanFileMutation(data, updated, mode, changed), nil
 }
 
 func DeleteTypeFile(path string, options TypeDeleteOptions) (FileMutation, error) {
@@ -143,7 +143,7 @@ func DeleteTypeFile(path string, options TypeDeleteOptions) (FileMutation, error
 	if err != nil {
 		return FileMutation{}, err
 	}
-	return FileMutation{Data: updated, Mode: mode, Changed: changed}, nil
+	return cleanFileMutation(data, updated, mode, changed), nil
 }
 
 func DeleteTypeXML(data []byte, options TypeDeleteOptions) ([]byte, bool, error) {
@@ -279,7 +279,7 @@ func UpdateLimitsFile(path string, kind string, name string, action LimitAction)
 	if err != nil {
 		return FileMutation{}, err
 	}
-	return FileMutation{Data: updated, Mode: mode, Changed: changed}, nil
+	return cleanFileMutation(data, updated, mode, changed), nil
 }
 
 func UpdateLimitsXML(data []byte, kind string, name string, action LimitAction) ([]byte, bool, error) {
@@ -319,7 +319,32 @@ func UpdateUserLimitGroupFile(path string, options UserLimitGroupOptions) (FileM
 	if err != nil {
 		return FileMutation{}, err
 	}
-	return FileMutation{Data: updated, Mode: mode, Changed: changed}, nil
+	return cleanFileMutation(data, updated, mode, changed), nil
+}
+
+func cleanFileMutation(original []byte, updated []byte, mode fs.FileMode, changed bool) FileMutation {
+	if !changed {
+		return FileMutation{Data: original, Mode: mode, Changed: false}
+	}
+	return FileMutation{Data: normalizeXMLWhitespace(updated), Mode: mode, Changed: true}
+}
+
+func normalizeXMLWhitespace(data []byte) []byte {
+	lineEnding := detectLineEnding(data)
+	normalized := strings.ReplaceAll(string(data), "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+	for index := range lines {
+		lines[index] = strings.TrimRight(lines[index], " \t\r")
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return []byte(strings.Join(lines, lineEnding) + lineEnding)
+}
+
+// NormalizeXMLMutationData returns economy XML with clean line endings and one terminal newline.
+func NormalizeXMLMutationData(data []byte) []byte {
+	return normalizeXMLWhitespace(data)
 }
 
 func UpdateUserLimitGroupXML(data []byte, options UserLimitGroupOptions) ([]byte, bool, error) {

@@ -63,8 +63,19 @@ func printWarnings(stdout io.Writer, status economyconfig.FileStatus) {
 	if len(status.WarningDetails) > 0 {
 		for _, warning := range status.WarningDetails {
 			fmt.Fprintf(stdout, "%s %s warning: %s\n", status.Kind, status.Path, warning.Message)
-			for _, command := range warning.Remediation {
-				fmt.Fprintf(stdout, "%s %s remediation: %s\n", status.Kind, status.Path, command)
+			if len(warning.Actions) > 0 {
+				for _, action := range warning.Actions {
+					if action.Command != "" {
+						fmt.Fprintf(stdout, "%s %s remediation: %s\n", status.Kind, status.Path, action.Command)
+					}
+					if action.Detail != "" {
+						fmt.Fprintf(stdout, "%s %s remediation: %s\n", status.Kind, status.Path, action.Detail)
+					}
+				}
+			} else {
+				for _, command := range warning.Remediation {
+					fmt.Fprintf(stdout, "%s %s remediation: %s\n", status.Kind, status.Path, command)
+				}
 			}
 			if warning.ManualOnly {
 				fmt.Fprintf(stdout, "%s %s remediation: validation-only; edit the XML manually\n", status.Kind, status.Path)

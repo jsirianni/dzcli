@@ -97,6 +97,75 @@ func TestEventSpawnCreateDeleteAndEmptyPrevention(t *testing.T) {
 	}
 }
 
+func TestEventSpawnInspectionAndRemediationAllowInvalidSiblings(t *testing.T) {
+	data := []byte("<eventposdef>\n  <event name=\"Empty\" />\n  <event name=\"Broken\"><pos x=\"bad\" /></event>\n</eventposdef>\n")
+	entries, err := ParseEventSpawnEntriesData(data, "spawns.xml")
+	if err != nil {
+		t.Fatalf("inspect invalid entries: %v", err)
+	}
+	if len(entries) != 2 || len(entries[0].Issues) == 0 || len(entries[1].Issues) == 0 {
+		t.Fatalf("entries = %#v", entries)
+	}
+	deleted, _, err := DeleteEventSpawnXML(data, "Empty", 0, false)
+	if err != nil || strings.Contains(string(deleted), `name="Empty"`) || !strings.Contains(string(deleted), `name="Broken"`) {
+		t.Fatalf("delete invalid entry: %v\n%s", err, deleted)
+	}
+	position, _ := ParseEventSpawnPosition("1,2")
+	created, _, err := CreateEventSpawnXML(deleted, "Valid", []EventSpawnPosition{position}, nil)
+	if err != nil || !strings.Contains(string(created), `name="Valid"`) {
+		t.Fatalf("create beside invalid entry: %v\n%s", err, created)
+	}
+}
+
+func TestEventSpawnStructuralValidationStillRejectsUnsafeDocuments(t *testing.T) {
+	for _, data := range []string{`<wrong><event name="A" /></wrong>`, `<eventposdef><event name="A"></eventposdef>`} {
+		if _, err := ParseEventSpawnEntriesData([]byte(data), "spawns.xml"); err == nil {
+			t.Fatalf("structural error = nil for %q", data)
+		}
+	}
+}
+
+func TestEventSpawnZoneCopyAndPlaceholderDetection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cfgeventspawns.xml")
+	data := `<eventposdef><event name="Source"><zone smin="0" smax="1" dmin="2" dmax="3" r="40" /><zone smin="1" smax="2" dmin="3" dmax="4" r="50" /></event></eventposdef>`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	zones, err := EventSpawnZonesFile(path, "Source", 0, false)
+	if err != nil || len(zones) != 2 {
+		t.Fatalf("zones = %#v, err = %v", zones, err)
+	}
+	created, _, err := CreateEventSpawnXMLWithOptions([]byte(`<eventposdef />`), EventSpawnCreateOptions{Name: "Target", Zones: zones})
+	if err != nil || strings.Count(string(created), "<zone ") != 2 {
+		t.Fatalf("copied zones: %v\n%s", err, created)
+	}
+	zero, _ := ParseEventSpawnZone("0,0.0,-0,0,0")
+	if !IsPlaceholderEventSpawnZone(zero) {
+		t.Fatal("zero zone not detected")
+	}
+}
+
+func TestChangedEconomyXMLIsWhitespaceClean(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cfgeventspawns.xml")
+	data := []byte("<eventposdef>  \r\n  <event name=\"A\">\r\n    <pos x=\"1\" z=\"2\" />   \r\n  </event>\t\r\n</eventposdef>   ")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mutation, err := DeleteEventSpawnFile(path, "A", 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(mutation.Data)
+	for _, line := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
+		if strings.HasSuffix(line, " ") || strings.HasSuffix(line, "\t") {
+			t.Fatalf("trailing whitespace remains in %q", line)
+		}
+	}
+	if !strings.HasSuffix(text, "\r\n") || strings.HasSuffix(text, "\r\n\r\n") {
+		t.Fatalf("terminal newline = %q", text)
+	}
+}
+
 func TestEventAndEnvironmentNoOpUpdates(t *testing.T) {
 	eventData := []byte(`<eventposdef><event name="A"><pos x="1" z="2" /></event></eventposdef>`)
 	updated, changed, err := UpdateEventSpawnXML(eventData, EventSpawnUpdateOptions{Name: "A"})
@@ -165,6 +234,27 @@ func TestEnvironmentReferenceMutationsAndScaffoldContainment(t *testing.T) {
 	}
 }
 
+func TestTerritoryTemplateAndLiveZoneScaffolds(t *testing.T) {
+	root := t.TempDir()
+	zone, err := ParseTerritoryZone("Zone_Hare,0,0,0,2,100,200,50")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, created, err := ScaffoldTerritoryFileWithOptions(root, "env/hare.xml", TerritoryScaffoldOptions{Template: true, OwnerName: "AmbientHare", OwnerType: "Ambient", SuggestedName: "Zone_Hare", Zones: []TerritoryZone{zone}})
+	if err != nil || !created {
+		t.Fatalf("live scaffold: created=%t err=%v", created, err)
+	}
+	data, _ := os.ReadFile(filepath.Join(root, "env", "hare.xml"))
+	for _, expected := range []string{"AmbientHare", `<territory>`, `x="100"`, `r="50"`} {
+		if !strings.Contains(string(data), expected) {
+			t.Fatalf("scaffold missing %q:\n%s", expected, data)
+		}
+	}
+	if _, err := ParseTerritoryZone("Zone,0,0,0,2,1,2,0"); err == nil {
+		t.Fatal("zero radius accepted")
+	}
+}
+
 func TestEnvironmentDuplicateTargeting(t *testing.T) {
 	data := []byte(`<env><territories><file path="env/a.xml" /><file path="env/a.xml" /><territory name="A"><file usable="u" /></territory><territory name="A"><file usable="u" /></territory></territories></env>`)
 	if _, _, err := UpdateEnvironmentXML(data, EnvironmentDelete, EnvironmentReferenceOptions{Kind: "path", Value: "env/a.xml"}); err == nil || !strings.Contains(err.Error(), "--occurrence") {
@@ -196,7 +286,7 @@ func TestEconomyRemediationIntegration(t *testing.T) {
 			t.Fatalf("%s lacks structured warning details", status.Kind)
 		}
 		for _, warning := range status.WarningDetails {
-			if len(warning.Remediation) == 0 && !warning.ManualOnly {
+			if len(warning.Remediation) == 0 && len(warning.Actions) == 0 && !warning.ManualOnly {
 				t.Fatalf("warning lacks a command or manual marker: %#v", warning)
 			}
 		}
@@ -205,10 +295,15 @@ func TestEconomyRemediationIntegration(t *testing.T) {
 	for _, status := range statuses {
 		for _, warning := range status.WarningDetails {
 			remediationCommands = append(remediationCommands, warning.Remediation...)
+			for _, action := range warning.Actions {
+				if action.Command != "" {
+					remediationCommands = append(remediationCommands, action.Command)
+				}
+			}
 		}
 	}
 	commandText := strings.Join(remediationCommands, "\n")
-	for _, expected := range []string{"delete economy types 'WoodenLog'", "update economy types 'NeedsRepair'", "create economy limits 'usage' 'MissingUsage'", "create economy event-spawns 'AnimalCow'", "delete economy environment path 'env/missing.xml'", "create economy environment path 'env/hare.xml'"} {
+	for _, expected := range []string{"delete economy types 'WoodenLog'", "update economy types 'NeedsRepair'", "create economy limits 'usage' 'MissingUsage'", "delete economy environment path 'env/missing.xml'", "create economy environment path 'env/hare.xml'"} {
 		if !strings.Contains(commandText, expected) {
 			t.Fatalf("remediation commands missing %q:\n%s", expected, commandText)
 		}

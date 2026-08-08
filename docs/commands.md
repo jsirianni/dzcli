@@ -18,6 +18,7 @@ dzcli
 | --- | --- |
 | `create` | Create DayZ configuration resources |
 | `delete` | Delete DayZ configuration resources |
+| `fix` | Plan or apply DayZ configuration remediation |
 | `get` | List DayZ configuration resources |
 | `update` | Update DayZ configuration resources |
 | `validate` | Validate DayZ configuration files |
@@ -93,7 +94,9 @@ dzcli create economy environment path <path> [flags]
 | `--file` | `` | cfgenvironment.xml path |
 | `--occurrence` | `0` | select a duplicate reference occurrence |
 | `--scaffold` | `false` | create a missing territory XML file |
+| `--scaffold-template` | `false` | create a missing territory XML template |
 | `--territory-occurrence` | `0` | select a duplicate territory occurrence |
+| `--zone` | `[]` | live zone as name,smin,smax,dmin,dmax,x,z,r |
 
 ## dzcli create economy environment usable
 
@@ -128,9 +131,12 @@ dzcli create economy event-spawns <name> [flags]
 
 | Flag | Default | Description |
 | --- | --- | --- |
+| `--copy-zone-from` | `` | copy every zone from another event |
 | `--dry-run` | `false` | print modified XML without writing |
 | `--file` | `` | cfgeventspawns.xml path |
 | `--pos` | `[]` | position as x,z[,a[,y]] |
+| `--scaffold-placeholder` | `false` | allow an explicit validation-only all-zero zone |
+| `--source-occurrence` | `0` | select a duplicate source event occurrence |
 | `--zone` | `` | zone as smin,smax,dmin,dmax,r |
 
 ## dzcli create economy limits
@@ -686,6 +692,40 @@ dzcli delete server <field> [flags]
 | `--dry-run` | `false` | print modified config without writing |
 | `--file` | `` | serverDZ.cfg path |
 
+## dzcli fix
+
+Plan or apply DayZ configuration remediation
+
+### Usage
+
+```text
+dzcli fix
+```
+
+### Commands
+
+| Command | Description |
+| --- | --- |
+| `economy` | Plan or apply supported economy remediation |
+
+## dzcli fix economy
+
+Plan or apply supported economy remediation
+
+### Usage
+
+```text
+dzcli fix economy <mission-root|economy-file> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--allow-destructive` | `false` | allow deterministic planned deletions |
+| `--apply` | `false` | apply unambiguous supported actions |
+| `--dry-run` | `false` | print the remediation plan without writing |
+
 ## dzcli get
 
 List DayZ configuration resources
@@ -1000,8 +1040,10 @@ dzcli update economy environment path <path> [flags]
 | `--file` | `` | cfgenvironment.xml path |
 | `--occurrence` | `0` | select a duplicate reference occurrence |
 | `--scaffold` | `false` | create a missing territory XML file |
+| `--scaffold-template` | `false` | create a missing territory XML template |
 | `--set-path` | `` | replace the registered path |
 | `--territory-occurrence` | `0` | select a duplicate territory occurrence |
+| `--zone` | `[]` | live zone as name,smin,smax,dmin,dmax,x,z,r |
 
 ## dzcli update economy environment usable
 
@@ -1038,14 +1080,17 @@ dzcli update economy event-spawns <name> [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--add-pos` | `[]` | add a position as x,z[,a[,y]] |
+| `--copy-zone-from` | `` | replace zones by copying every zone from another event |
 | `--dry-run` | `false` | print modified XML without writing |
 | `--file` | `` | cfgeventspawns.xml path |
 | `--occurrence` | `0` | select a duplicate event occurrence |
 | `--remove-pos` | `[]` | remove a 1-based position occurrence |
 | `--remove-zone` | `false` | remove every zone |
 | `--rename` | `` | rename the event entry |
+| `--scaffold-placeholder` | `false` | allow an explicit validation-only all-zero zone |
 | `--set-pos` | `[]` | replace positions with x,z[,a[,y]] |
 | `--set-zone` | `` | replace the zone with smin,smax,dmin,dmax,r |
+| `--source-occurrence` | `0` | select a duplicate source event occurrence |
 
 ## dzcli update economy types
 

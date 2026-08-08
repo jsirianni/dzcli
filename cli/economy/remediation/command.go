@@ -82,14 +82,18 @@ func NewGetEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 				return err
 			}
 			writer := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(writer, "NAME\tOCCURRENCE\tPOSITIONS\tZONES")
+			fmt.Fprintln(writer, "NAME\tOCCURRENCE\tPOSITIONS\tZONES\tSTATUS")
 			matched := 0
 			for _, entry := range entries {
 				if filter != "" && entry.Name != filter {
 					continue
 				}
 				matched++
-				fmt.Fprintf(writer, "%s\t%d\t%s\t%s\n", entry.Name, entry.Occurrence, formatPositions(entry.Positions), formatZones(entry.Zones))
+				name := entry.Name
+				if name == "" {
+					name = "<missing>"
+				}
+				fmt.Fprintf(writer, "%s\t%d\t%s\t%s\t%s\n", name, entry.Occurrence, formatPositions(entry.Positions), formatZones(entry.Zones), eventSpawnStatus(entry))
 			}
 			_ = writer.Flush()
 			if matched == 0 {
@@ -110,6 +114,9 @@ func NewCreateEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 	var file string
 	var rawPositions []string
 	var rawZone string
+	var copyZoneFrom string
+	var sourceOccurrence int
+	var scaffoldPlaceholder bool
 	var dryRun bool
 	command := &cobra.Command{
 		Use:   "event-spawns <name>",
@@ -119,30 +126,60 @@ func NewCreateEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 			if file == "" {
 				return fmt.Errorf("--file is required")
 			}
+			if cmd.Flags().Changed("source-occurrence") && copyZoneFrom == "" {
+				return fmt.Errorf("--source-occurrence requires --copy-zone-from")
+			}
+			if scaffoldPlaceholder && !cmd.Flags().Changed("zone") {
+				return fmt.Errorf("--scaffold-placeholder requires --zone")
+			}
 			positions, err := parsePositions(rawPositions)
 			if err != nil {
 				return err
 			}
-			var zone *economy.EventSpawnZone
+			var zones []economy.EventSpawnZone
+			placeholder := false
 			if cmd.Flags().Changed("zone") {
 				parsed, err := economy.ParseEventSpawnZone(rawZone)
 				if err != nil {
 					return err
 				}
-				zone = &parsed
+				placeholder = economy.IsPlaceholderEventSpawnZone(parsed)
+				if placeholder && !scaffoldPlaceholder {
+					return fmt.Errorf("all-zero zone is validation-only; use --scaffold-placeholder to create it explicitly")
+				}
+				if scaffoldPlaceholder && !placeholder {
+					return fmt.Errorf("--scaffold-placeholder requires an all-zero --zone")
+				}
+				zones = append(zones, parsed)
 			}
-			mutation, err := economy.CreateEventSpawnFile(file, args[0], positions, zone)
+			if copyZoneFrom != "" {
+				zones, err = economy.EventSpawnZonesFile(file, copyZoneFrom, sourceOccurrence, cmd.Flags().Changed("source-occurrence"))
+				if err != nil {
+					return err
+				}
+			}
+			mutation, err := economy.CreateEventSpawnFileWithOptions(file, economy.EventSpawnCreateOptions{Name: args[0], Positions: positions, Zones: zones})
 			if err != nil {
 				return err
 			}
-			return outputMutation(file, "event-spawns", mutation, dryRun, stdout)
+			if err := outputMutation(file, "event-spawns", mutation, dryRun, stdout); err != nil {
+				return err
+			}
+			if placeholder {
+				fmt.Fprintln(stdout, "warning: placeholder event zone satisfies validation only and may not provide useful gameplay behavior")
+			}
+			return nil
 		},
 	}
 	command.SetOut(stdout)
 	command.Flags().StringVar(&file, "file", "", "cfgeventspawns.xml path")
 	command.Flags().StringArrayVar(&rawPositions, "pos", nil, "position as x,z[,a[,y]]")
 	command.Flags().StringVar(&rawZone, "zone", "", "zone as smin,smax,dmin,dmax,r")
+	command.Flags().StringVar(&copyZoneFrom, "copy-zone-from", "", "copy every zone from another event")
+	command.Flags().IntVar(&sourceOccurrence, "source-occurrence", 0, "select a duplicate source event occurrence")
+	command.Flags().BoolVar(&scaffoldPlaceholder, "scaffold-placeholder", false, "allow an explicit validation-only all-zero zone")
 	command.Flags().BoolVar(&dryRun, "dry-run", false, "print modified XML without writing")
+	command.MarkFlagsMutuallyExclusive("zone", "copy-zone-from")
 	return command
 }
 
@@ -154,6 +191,9 @@ func NewUpdateEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 	var rawAddPositions []string
 	var removePositions []int
 	var rawZone string
+	var copyZoneFrom string
+	var sourceOccurrence int
+	var scaffoldPlaceholder bool
 	var removeZone bool
 	var dryRun bool
 	command := &cobra.Command{
@@ -163,6 +203,12 @@ func NewUpdateEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if file == "" {
 				return fmt.Errorf("--file is required")
+			}
+			if cmd.Flags().Changed("source-occurrence") && copyZoneFrom == "" {
+				return fmt.Errorf("--source-occurrence requires --copy-zone-from")
+			}
+			if scaffoldPlaceholder && !cmd.Flags().Changed("set-zone") {
+				return fmt.Errorf("--scaffold-placeholder requires --set-zone")
 			}
 			setPositions, err := parsePositions(rawSetPositions)
 			if err != nil {
@@ -182,13 +228,34 @@ func NewUpdateEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				placeholder := economy.IsPlaceholderEventSpawnZone(zone)
+				if placeholder && !scaffoldPlaceholder {
+					return fmt.Errorf("all-zero zone is validation-only; use --scaffold-placeholder to create it explicitly")
+				}
+				if scaffoldPlaceholder && !placeholder {
+					return fmt.Errorf("--scaffold-placeholder requires an all-zero --set-zone")
+				}
 				options.SetZone = &zone
+			}
+			if copyZoneFrom != "" {
+				zones, err := economy.EventSpawnZonesFile(file, copyZoneFrom, sourceOccurrence, cmd.Flags().Changed("source-occurrence"))
+				if err != nil {
+					return err
+				}
+				options.SetZones = zones
+				options.SetZonesSet = true
 			}
 			mutation, err := economy.UpdateEventSpawnFile(file, options)
 			if err != nil {
 				return err
 			}
-			return outputMutation(file, "event-spawns", mutation, dryRun, stdout)
+			if err := outputMutation(file, "event-spawns", mutation, dryRun, stdout); err != nil {
+				return err
+			}
+			if scaffoldPlaceholder {
+				fmt.Fprintln(stdout, "warning: placeholder event zone satisfies validation only and may not provide useful gameplay behavior")
+			}
+			return nil
 		},
 	}
 	command.SetOut(stdout)
@@ -200,8 +267,12 @@ func NewUpdateEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 	flags.StringArrayVar(&rawAddPositions, "add-pos", nil, "add a position as x,z[,a[,y]]")
 	flags.IntSliceVar(&removePositions, "remove-pos", nil, "remove a 1-based position occurrence")
 	flags.StringVar(&rawZone, "set-zone", "", "replace the zone with smin,smax,dmin,dmax,r")
+	flags.StringVar(&copyZoneFrom, "copy-zone-from", "", "replace zones by copying every zone from another event")
+	flags.IntVar(&sourceOccurrence, "source-occurrence", 0, "select a duplicate source event occurrence")
+	flags.BoolVar(&scaffoldPlaceholder, "scaffold-placeholder", false, "allow an explicit validation-only all-zero zone")
 	flags.BoolVar(&removeZone, "remove-zone", false, "remove every zone")
 	flags.BoolVar(&dryRun, "dry-run", false, "print modified XML without writing")
+	command.MarkFlagsMutuallyExclusive("set-zone", "copy-zone-from", "remove-zone")
 	return command
 }
 
@@ -298,6 +369,8 @@ func newEnvironmentReferenceCommand(action economy.EnvironmentAction, kind strin
 	var replacementPath string
 	var replacementUsable string
 	var scaffold bool
+	var scaffoldTemplate bool
+	var rawTerritoryZones []string
 	var dryRun bool
 	use := kind + " <path>"
 	if kind == "usable" {
@@ -326,6 +399,18 @@ func newEnvironmentReferenceCommand(action economy.EnvironmentAction, kind strin
 				options.Replacement = replacementUsable
 			}
 			missionRoot := filepath.Dir(filepath.Clean(file))
+			scaffoldRequested := scaffold || scaffoldTemplate
+			if len(rawTerritoryZones) > 0 && !scaffoldTemplate {
+				return fmt.Errorf("--zone requires --scaffold-template")
+			}
+			var territoryZones []economy.TerritoryZone
+			for _, raw := range rawTerritoryZones {
+				zone, err := economy.ParseTerritoryZone(raw)
+				if err != nil {
+					return err
+				}
+				territoryZones = append(territoryZones, zone)
+			}
 			pathToCheck := options.Value
 			var scaffoldTarget string
 			scaffoldCreated := false
@@ -337,7 +422,7 @@ func newEnvironmentReferenceCommand(action economy.EnvironmentAction, kind strin
 				if err != nil {
 					return err
 				}
-				if !scaffold {
+				if !scaffoldRequested {
 					if info, err := os.Stat(target); err != nil {
 						return fmt.Errorf("environment path %q does not exist; use --scaffold to create it: %w", pathToCheck, err)
 					} else if !info.Mode().IsRegular() {
@@ -353,9 +438,16 @@ func newEnvironmentReferenceCommand(action economy.EnvironmentAction, kind strin
 				_, err = stdout.Write(mutation.Data)
 				return err
 			}
-			if kind == "path" && action != economy.EnvironmentDelete && scaffold {
+			if kind == "path" && action != economy.EnvironmentDelete && scaffoldRequested {
 				var err error
-				scaffoldTarget, scaffoldCreated, err = economy.ScaffoldTerritoryFileWithResult(missionRoot, pathToCheck)
+				scaffoldOptions := economy.TerritoryScaffoldOptions{Template: scaffoldTemplate, Zones: territoryZones}
+				if scaffoldTemplate {
+					scaffoldOptions.OwnerName, scaffoldOptions.OwnerType, scaffoldOptions.SuggestedName, err = economy.InferTerritoryScaffoldOwner(file, pathToCheck)
+					if err != nil {
+						return err
+					}
+				}
+				scaffoldTarget, scaffoldCreated, err = economy.ScaffoldTerritoryFileWithOptions(missionRoot, pathToCheck, scaffoldOptions)
 				if err != nil {
 					return err
 				}
@@ -369,6 +461,9 @@ func newEnvironmentReferenceCommand(action economy.EnvironmentAction, kind strin
 				return err
 			}
 			fmt.Fprintf(stdout, "environment %s ok\n", file)
+			if scaffoldCreated && (scaffold || len(territoryZones) == 0) {
+				fmt.Fprintln(stdout, "warning: territory scaffold is validation-only and does not contain live spawn zones")
+			}
 			return nil
 		},
 	}
@@ -386,6 +481,9 @@ func newEnvironmentReferenceCommand(action economy.EnvironmentAction, kind strin
 	}
 	if kind == "path" && action != economy.EnvironmentDelete {
 		flags.BoolVar(&scaffold, "scaffold", false, "create a missing territory XML file")
+		flags.BoolVar(&scaffoldTemplate, "scaffold-template", false, "create a missing territory XML template")
+		flags.StringArrayVar(&rawTerritoryZones, "zone", nil, "live zone as name,smin,smax,dmin,dmax,x,z,r")
+		command.MarkFlagsMutuallyExclusive("scaffold", "scaffold-template")
 	}
 	return command
 }
@@ -423,6 +521,13 @@ func formatZones(values []economy.EventSpawnZone) string {
 		result = append(result, strings.Join([]string{value.SMin, value.SMax, value.DMin, value.DMax, value.R}, ","))
 	}
 	return strings.Join(result, ";")
+}
+
+func eventSpawnStatus(entry economy.EventSpawnEntry) string {
+	if len(entry.Issues) == 0 {
+		return "valid"
+	}
+	return "invalid: " + strings.Join(entry.Issues, "; ")
 }
 
 func outputMutation(path string, kind string, mutation economy.FileMutation, dryRun bool, stdout io.Writer) error {

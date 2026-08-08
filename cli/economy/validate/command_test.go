@@ -97,7 +97,7 @@ func TestValidateEconomyPrintsActionableAndManualRemediation(t *testing.T) {
 	}
 	output := stdout.String()
 	assertContains(t, output, "remediation: dzcli delete economy types 'WoodenLog'")
-	assertContains(t, output, "remediation: dzcli create economy event-spawns 'AnimalCow'")
+	assertContains(t, output, "remediation: input required: provide --pos coordinates or --copy-zone-from a valid event")
 	assertContains(t, output, "remediation: validation-only; edit the XML manually")
 }
 
