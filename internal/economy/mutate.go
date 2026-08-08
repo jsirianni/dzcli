@@ -40,6 +40,12 @@ type TypeUpdateOptions struct {
 	Collections    map[string]CollectionUpdate
 }
 
+type TypeDeleteOptions struct {
+	TypeName      string
+	Occurrence    int
+	OccurrenceSet bool
+}
+
 type LimitAction string
 
 const (
@@ -126,6 +132,54 @@ func UpdateTypesFile(path string, options TypeUpdateOptions) (FileMutation, erro
 		return FileMutation{}, err
 	}
 	return FileMutation{Data: updated, Mode: mode, Changed: changed}, nil
+}
+
+func DeleteTypeFile(path string, options TypeDeleteOptions) (FileMutation, error) {
+	data, mode, err := readMutableFile(path)
+	if err != nil {
+		return FileMutation{}, err
+	}
+	updated, changed, err := DeleteTypeXML(data, options)
+	if err != nil {
+		return FileMutation{}, err
+	}
+	return FileMutation{Data: updated, Mode: mode, Changed: changed}, nil
+}
+
+func DeleteTypeXML(data []byte, options TypeDeleteOptions) ([]byte, bool, error) {
+	if strings.TrimSpace(options.TypeName) == "" {
+		return nil, false, fmt.Errorf("type name is required")
+	}
+	if options.OccurrenceSet && options.Occurrence < 1 {
+		return nil, false, fmt.Errorf("occurrence must be greater than 0")
+	}
+	if _, err := parseTypesData(data, "types.xml"); err != nil {
+		return nil, false, err
+	}
+	ranges, err := findTypeRanges(data, options.TypeName)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(ranges) == 0 {
+		return nil, false, fmt.Errorf("type %q not found", options.TypeName)
+	}
+	if len(ranges) > 1 && !options.OccurrenceSet {
+		return nil, false, fmt.Errorf("type %q appears %d times; use --occurrence to select one", options.TypeName, len(ranges))
+	}
+	index := 0
+	if options.OccurrenceSet {
+		if options.Occurrence > len(ranges) {
+			return nil, false, fmt.Errorf("type %q occurrence %d not found", options.TypeName, options.Occurrence)
+		}
+		index = options.Occurrence - 1
+	}
+	target := ranges[index]
+	start, end := expandWholeLine(data, target.Start, target.End)
+	updated := replaceRange(data, start, end, nil)
+	if _, err := parseTypesData(updated, "types.xml"); err != nil {
+		return nil, false, err
+	}
+	return updated, true, nil
 }
 
 func ResolveTypesFileForType(economyCorePath string, typeName string) (string, error) {
@@ -953,6 +1007,18 @@ func replaceRange(data []byte, start int, end int, replacement []byte) []byte {
 	updated = append(updated, replacement...)
 	updated = append(updated, data[end:]...)
 	return updated
+}
+
+func expandWholeLine(data []byte, start int, end int) (int, int) {
+	lineStart := bytes.LastIndexByte(data[:start], '\n') + 1
+	if strings.TrimSpace(string(data[lineStart:start])) != "" {
+		return start, end
+	}
+	lineEndOffset := bytes.IndexByte(data[end:], '\n')
+	if lineEndOffset < 0 || strings.TrimSpace(string(data[end:])) != "" {
+		return start, end
+	}
+	return lineStart, end + lineEndOffset + 1
 }
 
 func attributeValue(start xml.StartElement, name string) string {

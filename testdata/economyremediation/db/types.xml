@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<types>
+  <type name="WoodenLog">
+    <nominal>1</nominal>
+  </type>
+  <type name="NeedsRepair">
+    <nominal>1</nominal>
+    <min>2</min>
+    <usage name="MissingUsage" />
+  </type>
+</types>

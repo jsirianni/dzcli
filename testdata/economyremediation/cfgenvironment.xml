@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<env>
+  <territories>
+    <file path="env/bear.xml" />
+    <file path="env/missing.xml" />
+    <territory name="Bear"><file usable="bear" /></territory>
+    <territory name="Hare"><file usable="hare" /></territory>
+  </territories>
+</env>

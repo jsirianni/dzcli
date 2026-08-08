@@ -26,6 +26,12 @@ dzcli validate economy ./mpmissions/dayzOffline.chernarusplus/db/types.xml
 
 Use this after changing `types.xml`, `cfgeconomycore.xml`, `cfglimitsdefinition.xml`, `cfglimitsdefinitionuser.xml`, or economy files referenced by `cfgeconomycore.xml`.
 
+Economy warnings remain non-fatal. Every warning is followed by either a scoped `dzcli` remediation command or `validation-only; edit the XML manually`. Parsing and schema errors remain fatal and return a non-zero exit code.
+
+Generated remediation commands single-quote dynamic values and paths so mission folders containing spaces or PowerShell metacharacters can be copied safely.
+
+For fixed events, validation requires an explicit `cfgeventspawns.xml` entry unless the event is disabled with `<active>0</active>` or a matching environment territory supplies spawn data through a registered, existing usable file. Matching is case-sensitive and also recognizes one leading `Animal` or `Ambient` prefix.
+
 ## XML
 
 Validate XML files recursively from the current directory:

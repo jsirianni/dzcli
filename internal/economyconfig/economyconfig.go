@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,11 +17,18 @@ import (
 )
 
 type FileStatus struct {
-	Path      string
-	Kind      string
-	TypeCount int
-	Warnings  []string
-	Err       error
+	Path           string
+	Kind           string
+	TypeCount      int
+	Warnings       []string
+	WarningDetails []WarningDetail
+	Err            error
+}
+
+type WarningDetail struct {
+	Message     string
+	Remediation []string
+	ManualOnly  bool
 }
 
 type ValidationErrors []string
@@ -114,7 +122,11 @@ func inspectExistingFile(path string, kind string, validate statusValidator) []F
 		return nil
 	}
 	warnings, err := validate(path)
-	return []FileStatus{{Path: filepath.Clean(path), Kind: kind, Warnings: warnings, Err: err}}
+	status := FileStatus{Path: filepath.Clean(path), Kind: kind, Err: err}
+	for _, warning := range warnings {
+		addStatusWarning(&status, warning, warningRemediation(kind, path, warning))
+	}
+	return []FileStatus{status}
 }
 
 func validateLimitsDefinitionStatus(path string) ([]string, error) {
@@ -135,7 +147,7 @@ func addAggregateWarnings(statuses []FileStatus, missionRoot string) {
 }
 
 func addEventSpawnWarnings(statuses []FileStatus, missionRoot string) {
-	events, err := eventPositions(filepath.Join(missionRoot, "db", "events.xml"))
+	events, err := eventDefinitions(filepath.Join(missionRoot, "db", "events.xml"))
 	if err != nil {
 		return
 	}
@@ -143,11 +155,15 @@ func addEventSpawnWarnings(statuses []FileStatus, missionRoot string) {
 	if err != nil {
 		return
 	}
-	for _, event := range sortedMapKeysString(events) {
-		if events[event] != "fixed" || spawns[event] {
+	environment, _ := loadEnvironmentContext(filepath.Join(missionRoot, "cfgenvironment.xml"), missionRoot)
+	for _, definition := range events {
+		event := definition.Name
+		if definition.Position != "fixed" || definition.Active != nil && *definition.Active == 0 || spawns[event] || environment.backsEvent(event) {
 			continue
 		}
-		appendWarning(statuses, "events", fmt.Sprintf("fixed event %q has no matching cfgeventspawns.xml event", event))
+		message := fmt.Sprintf("fixed event %q has no matching cfgeventspawns.xml event", event)
+		command := fmt.Sprintf("dzcli create economy event-spawns %s --file %s --pos %s", quotePowerShellArgument(event), quotePowerShellArgument(filepath.Join(missionRoot, "cfgeventspawns.xml")), quotePowerShellArgument("x,z"))
+		appendWarningDetail(statuses, "events", WarningDetail{Message: message, Remediation: []string{command}})
 	}
 }
 
@@ -164,7 +180,7 @@ func addRandomPresetWarnings(statuses []FileStatus, missionRoot string) {
 		if presets[ref] {
 			continue
 		}
-		appendWarning(statuses, "cfgspawnabletypes", fmt.Sprintf("references random preset %q not defined in cfgrandompresets.xml", ref))
+		appendWarningDetail(statuses, "cfgspawnabletypes", WarningDetail{Message: fmt.Sprintf("references random preset %q not defined in cfgrandompresets.xml", ref), ManualOnly: true})
 	}
 }
 
@@ -174,10 +190,19 @@ func addEnvironmentWarnings(statuses []FileStatus, missionRoot string) {
 		return
 	}
 	usableFiles := map[string]bool{}
+	pathOccurrences := map[string]int{}
 	for _, path := range paths {
+		pathOccurrences[path]++
 		fullPath := filepath.Join(missionRoot, filepath.FromSlash(path))
-		if _, err := os.Stat(fullPath); err != nil && errors.Is(err, os.ErrNotExist) {
-			appendWarning(statuses, "cfgenvironment", fmt.Sprintf("references missing territory file %q", path))
+		info, statErr := os.Stat(fullPath)
+		if (statErr != nil && errors.Is(statErr, os.ErrNotExist)) || (statErr == nil && !info.Mode().IsRegular()) {
+			appendWarningDetail(statuses, "cfgenvironment", WarningDetail{
+				Message: fmt.Sprintf("references missing territory file %q", path),
+				Remediation: []string{
+					fmt.Sprintf("dzcli update economy environment path %s --file %s --occurrence %d --set-path %s --scaffold", quotePowerShellArgument(path), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml")), pathOccurrences[path], quotePowerShellArgument(path)),
+					fmt.Sprintf("dzcli delete economy environment path %s --file %s --occurrence %d", quotePowerShellArgument(path), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml")), pathOccurrences[path]),
+				},
+			})
 		}
 		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		usableFiles[base] = true
@@ -186,17 +211,69 @@ func addEnvironmentWarnings(statuses []FileStatus, missionRoot string) {
 		if usableFiles[usable] {
 			continue
 		}
-		appendWarning(statuses, "cfgenvironment", fmt.Sprintf("references usable file %q not registered by path", usable))
+		matches, _ := findTerritoryFileMatches(missionRoot, usable)
+		detail := WarningDetail{Message: fmt.Sprintf("references usable file %q not registered by path", usable)}
+		if len(matches) == 1 {
+			relative, _ := filepath.Rel(missionRoot, matches[0])
+			detail.Remediation = []string{fmt.Sprintf("dzcli create economy environment path %s --file %s", quotePowerShellArgument(filepath.ToSlash(relative)), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml")))}
+		} else {
+			detail.ManualOnly = true
+		}
+		appendWarningDetail(statuses, "cfgenvironment", detail)
 	}
 }
 
+func findTerritoryFileMatches(missionRoot string, usable string) ([]string, error) {
+	var matches []string
+	err := filepath.WalkDir(missionRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".xml") {
+			return nil
+		}
+		base := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		if base == usable {
+			matches = append(matches, path)
+		}
+		return nil
+	})
+	sort.Strings(matches)
+	return matches, err
+}
+
 func appendWarning(statuses []FileStatus, kind string, warning string) {
+	appendWarningDetail(statuses, kind, WarningDetail{Message: warning, ManualOnly: true})
+}
+
+func appendWarningDetail(statuses []FileStatus, kind string, warning WarningDetail) {
 	for index := range statuses {
 		if statuses[index].Kind == kind && statuses[index].Err == nil {
-			statuses[index].Warnings = append(statuses[index].Warnings, warning)
+			addStatusWarning(&statuses[index], warning.Message, warning)
 			return
 		}
 	}
+}
+
+func addStatusWarning(status *FileStatus, message string, detail WarningDetail) {
+	detail.Message = message
+	status.Warnings = append(status.Warnings, message)
+	status.WarningDetails = append(status.WarningDetails, detail)
+}
+
+func quotePowerShellArgument(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func warningRemediation(kind string, path string, warning string) WarningDetail {
+	detail := WarningDetail{Message: warning}
+	if kind == "types" || kind == "base-types" {
+		detail.Remediation = typeWarningRemediation(path, warning)
+	}
+	if len(detail.Remediation) == 0 {
+		detail.ManualOnly = true
+	}
+	return detail
 }
 
 func sortedMapKeysString(values map[string]string) []string {
@@ -215,6 +292,154 @@ func sortedMapKeysBool(values map[string]bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+type eventDefinition struct {
+	Name       string
+	Occurrence int
+	Position   string
+	Active     *int
+}
+
+func eventDefinitions(path string) ([]eventDefinition, error) {
+	data, err := readConfigFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	if _, err := ParseEventsData(data, path); err != nil {
+		return nil, err
+	}
+	var document struct {
+		Events []struct {
+			Name     string `xml:"name,attr"`
+			Position string `xml:"position"`
+			Active   *int   `xml:"active"`
+		} `xml:"event"`
+	}
+	if err := xml.Unmarshal(data, &document); err != nil {
+		return nil, err
+	}
+	definitions := make([]eventDefinition, 0, len(document.Events))
+	counts := map[string]int{}
+	for _, event := range document.Events {
+		counts[event.Name]++
+		definitions = append(definitions, eventDefinition{Name: event.Name, Occurrence: counts[event.Name], Position: strings.TrimSpace(event.Position), Active: event.Active})
+	}
+	sort.SliceStable(definitions, func(left, right int) bool {
+		if definitions[left].Name != definitions[right].Name {
+			return definitions[left].Name < definitions[right].Name
+		}
+		return definitions[left].Occurrence < definitions[right].Occurrence
+	})
+	return definitions, nil
+}
+
+type environmentContext struct {
+	validPaths  map[string]bool
+	territories map[string][]string
+}
+
+func loadEnvironmentContext(path string, missionRoot string) (environmentContext, error) {
+	context := environmentContext{validPaths: map[string]bool{}, territories: map[string][]string{}}
+	data, err := readConfigFile(path)
+	if err != nil {
+		return context, err
+	}
+	if _, _, err := ParseEnvironmentData(data, path); err != nil {
+		return context, err
+	}
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	type territoryState struct {
+		name  string
+		depth int
+	}
+	var stack []territoryState
+	depth := 0
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return context, nil
+		}
+		if err != nil {
+			return context, err
+		}
+		switch typed := token.(type) {
+		case xml.StartElement:
+			depth++
+			if typed.Name.Local == "territory" {
+				name := attrValue(typed, "name")
+				if name == "" {
+					name = attrValue(typed, "type")
+				}
+				stack = append(stack, territoryState{name: name, depth: depth})
+			}
+			if typed.Name.Local == "file" {
+				if pathValue := attrValue(typed, "path"); pathValue != "" {
+					fullPath := filepath.Join(missionRoot, filepath.FromSlash(pathValue))
+					if info, statErr := os.Stat(fullPath); statErr == nil && info.Mode().IsRegular() {
+						base := strings.TrimSuffix(filepath.Base(pathValue), filepath.Ext(pathValue))
+						context.validPaths[base] = true
+					}
+				}
+				if usable := attrValue(typed, "usable"); usable != "" && len(stack) > 0 {
+					owner := stack[len(stack)-1].name
+					context.territories[owner] = append(context.territories[owner], usable)
+				}
+			}
+		case xml.EndElement:
+			if typed.Name.Local == "territory" && len(stack) > 0 && stack[len(stack)-1].depth == depth {
+				stack = stack[:len(stack)-1]
+			}
+			depth--
+		}
+	}
+}
+
+func (context environmentContext) backsEvent(eventName string) bool {
+	territoryNames := []string{eventName}
+	for _, prefix := range []string{"Animal", "Ambient"} {
+		if strings.HasPrefix(eventName, prefix) {
+			territoryNames = append(territoryNames, strings.TrimPrefix(eventName, prefix))
+			break
+		}
+	}
+	for _, name := range territoryNames {
+		for _, usable := range context.territories[name] {
+			if context.validPaths[usable] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+var typeReferenceWarningPattern = regexp.MustCompile(`^type "([^"]+)" references (category|tag|usage|value) "([^"]+)" not defined`)
+
+func typeWarningRemediation(path string, warning string) []string {
+	if matches := typeReferenceWarningPattern.FindStringSubmatch(warning); matches != nil {
+		limitsPath := findLimitsPathNear(path)
+		return []string{
+			fmt.Sprintf("dzcli create economy limits %s %s --file %s", quotePowerShellArgument(matches[2]), quotePowerShellArgument(matches[3]), quotePowerShellArgument(limitsPath)),
+			fmt.Sprintf("dzcli update economy types %s --file %s --remove-%s %s", quotePowerShellArgument(matches[1]), quotePowerShellArgument(path), matches[2], quotePowerShellArgument(matches[3])),
+		}
+	}
+	return nil
+}
+
+func findLimitsPathNear(path string) string {
+	directory := filepath.Dir(filepath.Clean(path))
+	for {
+		candidate := filepath.Join(directory, "cfglimitsdefinition.xml")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			break
+		}
+		directory = parent
+	}
+	return "cfglimitsdefinition.xml"
 }
 
 func InspectEconomyCore(path string) ([]FileStatus, error) {
@@ -250,12 +475,37 @@ func InspectEconomyCore(path string) ([]FileStatus, error) {
 			status.Kind = "base-types"
 		}
 
-		types, warnings, parseErr := ValidateTypesFile(typeFile, limits)
+		types, _, parseErr := ValidateTypesFile(typeFile, limits)
 		if parseErr != nil {
 			status.Err = parseErr
 		} else {
 			status.TypeCount = len(types.Types)
-			status.Warnings = append(status.Warnings, warnings...)
+			totals := map[string]int{}
+			for _, entry := range types.Types {
+				totals[entry.Name]++
+			}
+			occurrences := map[string]int{}
+			for _, entry := range types.Types {
+				occurrences[entry.Name]++
+				warnings := append(validateLimitReferences(entry, limits), validateRelationships(entry)...)
+				for _, warning := range warnings {
+					detail := warningRemediation(status.Kind, typeFile, warning)
+					if strings.Contains(warning, "has min greater than nominal") {
+						detail = WarningDetail{Message: warning, Remediation: []string{fmt.Sprintf("dzcli update economy types %s --file %s --min %d", quotePowerShellArgument(entry.Name), quotePowerShellArgument(typeFile), entry.Nominal)}}
+					}
+					if strings.Contains(warning, "has quantmin greater than quantmax") {
+						detail = WarningDetail{Message: warning, Remediation: []string{fmt.Sprintf("dzcli update economy types %s --file %s --quantmin %d", quotePowerShellArgument(entry.Name), quotePowerShellArgument(typeFile), entry.QuantMax)}}
+					}
+					if totals[entry.Name] > 1 {
+						for index, command := range detail.Remediation {
+							if strings.Contains(command, "update economy types") {
+								detail.Remediation[index] = command + fmt.Sprintf(" --occurrence %d", occurrences[entry.Name])
+							}
+						}
+					}
+					addStatusWarning(&status, warning, detail)
+				}
+			}
 		}
 		statuses = append(statuses, status)
 	}
@@ -457,6 +707,72 @@ func (entry *TypeEntry) markSingletonField(name string) error {
 
 func (entry TypeEntry) hasField(name string) bool {
 	return entry.seenFields[name]
+}
+
+func (entry TypeEntry) HasField(name string) bool {
+	return entry.hasField(name)
+}
+
+func NormalizedTypeFields(entry TypeEntry) map[string]string {
+	fields := map[string]string{"name": entry.Name}
+	scalars := map[string]int{
+		"nominal": entry.Nominal, "lifetime": entry.Lifetime, "restock": entry.Restock,
+		"min": entry.Min, "quantmin": entry.QuantMin, "quantmax": entry.QuantMax, "cost": entry.Cost,
+	}
+	for _, name := range []string{"nominal", "lifetime", "restock", "min", "quantmin", "quantmax", "cost"} {
+		if entry.hasField(name) {
+			fields[name] = strconv.Itoa(scalars[name])
+		} else {
+			fields[name] = "<absent>"
+		}
+	}
+	flags := make([]string, 0, len(entry.Flags))
+	for _, flag := range entry.Flags {
+		flags = append(flags, string(flag.Name)+"="+strconv.FormatBool(flag.Value))
+	}
+	sort.Strings(flags)
+	if entry.hasField("flags") {
+		fields["flags"] = strings.Join(flags, ",")
+	} else {
+		fields["flags"] = "<absent>"
+	}
+	fields["category"] = normalizedNamedValues(categoriesToStrings(entry.Categories))
+	fields["tag"] = normalizedNamedValues(namedFieldsToStrings(entry.Tags))
+	fields["usage"] = normalizedNamedValues(namedFieldsToStrings(entry.Usages))
+	fields["value"] = normalizedNamedValues(valueFieldsToStrings(entry.Values))
+	return fields
+}
+
+func normalizedNamedValues(values []string) string {
+	if len(values) == 0 {
+		return "<absent>"
+	}
+	sort.Strings(values)
+	return strings.Join(values, ",")
+}
+
+func categoriesToStrings(values []Category) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, string(value))
+	}
+	return result
+}
+
+func namedFieldsToStrings(values []NamedField) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, value.Name)
+	}
+	return result
+}
+
+func valueFieldsToStrings(values []ValueField) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, value.Name)
+	}
+	return result
 }
 
 type integerRange struct {
@@ -767,6 +1083,7 @@ func addTypeIdentityWarnings(statuses []FileStatus) {
 	}
 
 	seen := make(map[string]location)
+	fileOccurrences := make(map[string]int)
 	for statusIndex := range statuses {
 		status := &statuses[statusIndex]
 		if status.Err != nil || (status.Kind != "base-types" && status.Kind != "types") {
@@ -778,9 +1095,12 @@ func addTypeIdentityWarnings(statuses []FileStatus) {
 			continue
 		}
 		for _, entry := range types.Types {
+			fileOccurrences[status.Path+"\x00"+entry.Name]++
 			previous, exists := seen[entry.Name]
 			if exists {
-				status.Warnings = append(status.Warnings, fmt.Sprintf("type %q duplicates a type already loaded from %s", entry.Name, previous.Path))
+				message := fmt.Sprintf("type %q duplicates a type already loaded from %s", entry.Name, previous.Path)
+				detail := WarningDetail{Message: message, Remediation: []string{fmt.Sprintf("dzcli delete economy types %s --file %s --occurrence %d", quotePowerShellArgument(entry.Name), quotePowerShellArgument(status.Path), fileOccurrences[status.Path+"\x00"+entry.Name])}}
+				addStatusWarning(status, message, detail)
 				continue
 			}
 			seen[entry.Name] = location{Path: status.Path}
@@ -1304,6 +1624,7 @@ func parseEventSpawnsRoot(decoder *xml.Decoder, root xml.StartElement, names map
 
 func parseEventSpawnEvent(decoder *xml.Decoder, start xml.StartElement, names map[string]bool, errs *ValidationErrors) error {
 	name := attrValue(start, "name")
+	hasSpawnData := false
 	if strings.TrimSpace(name) == "" {
 		addValidationError(errs, "cfgeventspawns event missing name")
 	} else {
@@ -1317,13 +1638,21 @@ func parseEventSpawnEvent(decoder *xml.Decoder, start xml.StartElement, names ma
 		switch value := token.(type) {
 		case xml.StartElement:
 			if value.Name.Local == "pos" {
+				hasSpawnData = true
 				validateEventSpawnPos(value, name, errs)
+			}
+			if value.Name.Local == "zone" {
+				hasSpawnData = true
+				validateEventSpawnZone(value, name, errs)
 			}
 			if err := skipXMLElement(decoder, value.Name.Local); err != nil {
 				return err
 			}
 		case xml.EndElement:
 			if value.Name.Local == start.Name.Local {
+				if !hasSpawnData {
+					addValidationError(errs, "event %q requires at least one pos or zone", name)
+				}
 				return nil
 			}
 		}
@@ -1337,17 +1666,39 @@ func validateEventSpawnPos(start xml.StartElement, eventName string, errs *Valid
 			addValidationError(errs, "event %q pos missing %s", eventName, name)
 			continue
 		}
-		if _, err := strconv.ParseFloat(value, 64); err != nil {
+		if !isFiniteConfigFloat(value) {
 			addValidationError(errs, "event %q pos %s expected float", eventName, name)
 		}
 	}
 	angleText := attrValue(start, "a")
-	if strings.TrimSpace(angleText) == "" {
-		return
+	if strings.TrimSpace(angleText) != "" {
+		if !isFiniteConfigFloat(strings.TrimSpace(angleText)) {
+			addValidationError(errs, "event %q pos a expected float", eventName)
+		}
 	}
-	if _, err := strconv.ParseFloat(strings.TrimSpace(angleText), 64); err != nil {
-		addValidationError(errs, "event %q pos a expected float", eventName)
+	if yText := attrValue(start, "y"); strings.TrimSpace(yText) != "" {
+		if !isFiniteConfigFloat(strings.TrimSpace(yText)) {
+			addValidationError(errs, "event %q pos y expected float", eventName)
+		}
 	}
+}
+
+func validateEventSpawnZone(start xml.StartElement, eventName string, errs *ValidationErrors) {
+	for _, name := range []string{"smin", "smax", "dmin", "dmax", "r"} {
+		value := strings.TrimSpace(attrValue(start, name))
+		if value == "" {
+			addValidationError(errs, "event %q zone missing %s", eventName, name)
+			continue
+		}
+		if !isFiniteConfigFloat(value) {
+			addValidationError(errs, "event %q zone %s expected float", eventName, name)
+		}
+	}
+}
+
+func isFiniteConfigFloat(value string) bool {
+	number, err := strconv.ParseFloat(value, 64)
+	return err == nil && !math.IsNaN(number) && !math.IsInf(number, 0)
 }
 
 func ValidateRandomPresetsFile(path string) ([]string, error) {
