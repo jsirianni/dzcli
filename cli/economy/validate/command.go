@@ -60,7 +60,20 @@ func printStatuses(statuses []economyconfig.FileStatus, stdout io.Writer) error 
 }
 
 func printWarnings(stdout io.Writer, status economyconfig.FileStatus) {
+	if len(status.WarningDetails) > 0 {
+		for _, warning := range status.WarningDetails {
+			fmt.Fprintf(stdout, "%s %s warning: %s\n", status.Kind, status.Path, warning.Message)
+			for _, command := range warning.Remediation {
+				fmt.Fprintf(stdout, "%s %s remediation: %s\n", status.Kind, status.Path, command)
+			}
+			if warning.ManualOnly {
+				fmt.Fprintf(stdout, "%s %s remediation: validation-only; edit the XML manually\n", status.Kind, status.Path)
+			}
+		}
+		return
+	}
 	for _, warning := range status.Warnings {
 		fmt.Fprintf(stdout, "%s %s warning: %s\n", status.Kind, status.Path, warning)
+		fmt.Fprintf(stdout, "%s %s remediation: validation-only; edit the XML manually\n", status.Kind, status.Path)
 	}
 }

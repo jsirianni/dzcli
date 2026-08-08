@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<eventposdef>
+  <!-- unrelated content survives event creation -->
+  <event name="StaticExisting"><pos x="1" z="2" /></event>
+</eventposdef>

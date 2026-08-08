@@ -12,6 +12,8 @@ import (
 
 	initvalidate "dzcli/cli/dayzinit/validate"
 	"dzcli/cli/economy/limits"
+	"dzcli/cli/economy/remediation"
+	typedelete "dzcli/cli/economy/types/delete"
 	typeupdate "dzcli/cli/economy/types/update"
 	cevalidate "dzcli/cli/economy/validate"
 	"dzcli/cli/expansion/ai/loadouts"
@@ -43,7 +45,7 @@ func NewGetCommand(stdout io.Writer) *cobra.Command {
 func NewCreateCommand(stdout io.Writer) *cobra.Command {
 	command := newParent("create", "Create DayZ configuration resources")
 	command.SetOut(stdout)
-	command.AddCommand(newEconomyParent(stdout, limits.NewCreateCommand(stdout)))
+	command.AddCommand(newEconomyParent(stdout, limits.NewCreateCommand(stdout), remediation.NewCreateEventSpawnsCommand(stdout), remediation.NewCreateEnvironmentCommand(stdout)))
 	command.AddCommand(newExpansionParent(stdout, newAIParent(stdout, patrols.NewCreateCommand(stdout), loadouts.NewCreateCommand(stdout))))
 	return command
 }
@@ -51,7 +53,7 @@ func NewCreateCommand(stdout io.Writer) *cobra.Command {
 func NewUpdateCommand(stdin io.Reader, stdout io.Writer) *cobra.Command {
 	command := newParent("update", "Update DayZ configuration resources")
 	command.SetOut(stdout)
-	command.AddCommand(newEconomyParent(stdout, typeupdate.NewCommand(stdout)))
+	command.AddCommand(newEconomyParent(stdout, typeupdate.NewCommand(stdout), remediation.NewUpdateEventSpawnsCommand(stdout), remediation.NewUpdateEnvironmentCommand(stdout)))
 	command.AddCommand(newExpansionParent(stdout, newAIParent(stdout, patrols.NewUpdateCommand(stdout), loadouts.NewUpdateCommand(stdout))))
 	command.AddCommand(serverconfigcmd.NewUpdateCommand(stdin, stdout))
 	command.AddCommand(servergameplaycmd.NewUpdateCommand(stdin, stdout))
@@ -61,7 +63,7 @@ func NewUpdateCommand(stdin io.Reader, stdout io.Writer) *cobra.Command {
 func NewDeleteCommand(stdin io.Reader, stdout io.Writer) *cobra.Command {
 	command := newParent("delete", "Delete DayZ configuration resources")
 	command.SetOut(stdout)
-	command.AddCommand(newEconomyParent(stdout, limits.NewDeleteCommand(stdout)))
+	command.AddCommand(newEconomyParent(stdout, limits.NewDeleteCommand(stdout), typedelete.NewCommand(stdout), remediation.NewDeleteEventSpawnsCommand(stdout), remediation.NewDeleteEnvironmentCommand(stdout)))
 	command.AddCommand(newExpansionParent(stdout, newAIParent(stdout, patrols.NewDeleteCommand(stdout), loadouts.NewDeleteCommandWithInput(stdin, stdout))))
 	command.AddCommand(serverconfigcmd.NewDeleteCommand(stdout))
 	command.AddCommand(servergameplaycmd.NewDeleteCommand(stdout))
@@ -109,12 +111,17 @@ func newGetEconomyCommand(stdout io.Writer) *cobra.Command {
 	command := newParent("economy", "List DayZ central economy resources")
 	command.AddCommand(newGetEconomyTypesCommand(stdout))
 	command.AddCommand(newGetEconomyLimitsCommand(stdout))
+	command.AddCommand(remediation.NewGetEventSpawnsCommand(stdout))
+	command.AddCommand(remediation.NewGetEventsCommand(stdout))
+	command.AddCommand(remediation.NewGetEnvironmentCommand(stdout))
 	return command
 }
 
 func newGetEconomyTypesCommand(stdout io.Writer) *cobra.Command {
 	var file string
 	var economyCore string
+	var duplicates bool
+	var compare bool
 	command := &cobra.Command{
 		Use:   "types [name]",
 		Short: "List type entries",
@@ -124,11 +131,13 @@ func newGetEconomyTypesCommand(stdout io.Writer) *cobra.Command {
 			if len(args) == 1 {
 				filter = args[0]
 			}
-			return listEconomyTypes(file, economyCore, filter, stdout)
+			return listEconomyTypesAdvanced(file, economyCore, filter, duplicates, compare, stdout)
 		},
 	}
 	command.Flags().StringVar(&file, "file", "", "types.xml path")
 	command.Flags().StringVar(&economyCore, "cfgeconomycore", "", "cfgeconomycore.xml path")
+	command.Flags().BoolVar(&duplicates, "duplicates", false, "list only type names defined more than once")
+	command.Flags().BoolVar(&compare, "compare", false, "compare normalized duplicate definitions")
 	return command
 }
 
@@ -214,25 +223,99 @@ func newGetExpansionAILoadoutsCommand(stdout io.Writer) *cobra.Command {
 }
 
 func listEconomyTypes(file string, economyCore string, filter string, stdout io.Writer) error {
+	return listEconomyTypesAdvanced(file, economyCore, filter, false, false, stdout)
+}
+
+type economyTypeLocation struct {
+	Entry      economyconfig.TypeEntry
+	Path       string
+	Occurrence int
+	Canonical  bool
+}
+
+func listEconomyTypesAdvanced(file string, economyCore string, filter string, duplicates bool, compare bool, stdout io.Writer) error {
+	if compare && filter == "" {
+		return fmt.Errorf("--compare requires a type name")
+	}
 	files, err := economyTypeFiles(file, economyCore)
 	if err != nil {
 		return err
 	}
-	var rows [][]string
+	var locations []economyTypeLocation
+	counts := map[string]int{}
+	fileCounts := map[string]int{}
 	for _, path := range files {
 		types, err := economyconfig.ParseTypesFile(path)
 		if err != nil {
 			return err
 		}
 		for _, entry := range types.Types {
-			if filter != "" && entry.Name != filter {
-				continue
-			}
-			rows = append(rows, []string{entry.Name, displayFileName(path)})
+			counts[entry.Name]++
+			key := path + "\x00" + entry.Name
+			fileCounts[key]++
+			locations = append(locations, economyTypeLocation{Entry: entry, Path: filepath.Clean(path), Occurrence: fileCounts[key], Canonical: counts[entry.Name] == 1})
 		}
+	}
+	if compare {
+		return compareEconomyTypes(locations, filter, stdout)
+	}
+	var rows [][]string
+	for _, location := range locations {
+		if filter != "" && location.Entry.Name != filter {
+			continue
+		}
+		if duplicates && counts[location.Entry.Name] < 2 {
+			continue
+		}
+		status := "duplicate"
+		if location.Canonical {
+			status = "canonical"
+		}
+		if duplicates {
+			rows = append(rows, []string{location.Entry.Name, location.Path, strconv.Itoa(location.Occurrence), status})
+		} else {
+			rows = append(rows, []string{location.Entry.Name, displayFileName(location.Path)})
+		}
+	}
+	if duplicates {
+		sortRows(rows, 0, 1, 2)
+		return printMatchedRows(stdout, []string{"NAME", "FILE", "OCCURRENCE", "STATUS"}, rows, "duplicate type", filter)
 	}
 	sortRows(rows, 0, 1)
 	return printMatchedRows(stdout, []string{"NAME", "FILE"}, rows, "type", filter)
+}
+
+func compareEconomyTypes(locations []economyTypeLocation, name string, stdout io.Writer) error {
+	var matches []economyTypeLocation
+	for _, location := range locations {
+		if location.Entry.Name == name {
+			matches = append(matches, location)
+		}
+	}
+	if len(matches) < 2 {
+		return fmt.Errorf("type %q does not have duplicate definitions", name)
+	}
+	canonical := economyconfig.NormalizedTypeFields(matches[0].Entry)
+	var rows [][]string
+	for _, duplicate := range matches[1:] {
+		fields := economyconfig.NormalizedTypeFields(duplicate.Entry)
+		keys := make([]string, 0, len(fields))
+		for field := range fields {
+			if canonical[field] != fields[field] {
+				keys = append(keys, field)
+			}
+		}
+		sort.Strings(keys)
+		for _, field := range keys {
+			rows = append(rows, []string{field, duplicate.Path, strconv.Itoa(duplicate.Occurrence), canonical[field], fields[field]})
+		}
+	}
+	if len(rows) == 0 {
+		fmt.Fprintf(stdout, "type %s duplicate definitions are identical\n", name)
+		return nil
+	}
+	printTable(stdout, []string{"FIELD", "FILE", "OCCURRENCE", "CANONICAL", "VALUE"}, rows)
+	return nil
 }
 
 func economyTypeFiles(file string, economyCore string) ([]string, error) {

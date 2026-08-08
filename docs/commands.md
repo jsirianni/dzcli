@@ -53,7 +53,84 @@ dzcli create economy
 
 | Command | Description |
 | --- | --- |
+| `environment` | create cfgenvironment.xml references |
+| `event-spawns` | Create a cfgeventspawns.xml event entry |
 | `limits` | create a base limits definition |
+
+## dzcli create economy environment
+
+create cfgenvironment.xml references
+
+### Usage
+
+```text
+dzcli create economy environment
+```
+
+### Commands
+
+| Command | Description |
+| --- | --- |
+| `path` | create an environment path reference |
+| `usable` | create an environment usable reference |
+
+## dzcli create economy environment path
+
+create an environment path reference
+
+### Usage
+
+```text
+dzcli create economy environment path <path> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | print modified XML without writing |
+| `--file` | `` | cfgenvironment.xml path |
+| `--occurrence` | `0` | select a duplicate reference occurrence |
+| `--scaffold` | `false` | create a missing territory XML file |
+| `--territory-occurrence` | `0` | select a duplicate territory occurrence |
+
+## dzcli create economy environment usable
+
+create an environment usable reference
+
+### Usage
+
+```text
+dzcli create economy environment usable <territory> <usable> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | print modified XML without writing |
+| `--file` | `` | cfgenvironment.xml path |
+| `--occurrence` | `0` | select a duplicate reference occurrence |
+| `--territory-occurrence` | `0` | select a duplicate territory occurrence |
+
+## dzcli create economy event-spawns
+
+Create a cfgeventspawns.xml event entry
+
+### Usage
+
+```text
+dzcli create economy event-spawns <name> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | print modified XML without writing |
+| `--file` | `` | cfgeventspawns.xml path |
+| `--pos` | `[]` | position as x,z[,a[,y]] |
+| `--zone` | `` | zone as smin,smax,dmin,dmax,r |
 
 ## dzcli create economy limits
 
@@ -321,7 +398,83 @@ dzcli delete economy
 
 | Command | Description |
 | --- | --- |
+| `environment` | delete cfgenvironment.xml references |
+| `event-spawns` | Delete one cfgeventspawns.xml event entry |
 | `limits` | delete a base limits definition |
+| `types` | Delete one type entry from a types XML file |
+
+## dzcli delete economy environment
+
+delete cfgenvironment.xml references
+
+### Usage
+
+```text
+dzcli delete economy environment
+```
+
+### Commands
+
+| Command | Description |
+| --- | --- |
+| `path` | delete an environment path reference |
+| `usable` | delete an environment usable reference |
+
+## dzcli delete economy environment path
+
+delete an environment path reference
+
+### Usage
+
+```text
+dzcli delete economy environment path <path> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | print modified XML without writing |
+| `--file` | `` | cfgenvironment.xml path |
+| `--occurrence` | `0` | select a duplicate reference occurrence |
+| `--territory-occurrence` | `0` | select a duplicate territory occurrence |
+
+## dzcli delete economy environment usable
+
+delete an environment usable reference
+
+### Usage
+
+```text
+dzcli delete economy environment usable <territory> <usable> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | print modified XML without writing |
+| `--file` | `` | cfgenvironment.xml path |
+| `--occurrence` | `0` | select a duplicate reference occurrence |
+| `--territory-occurrence` | `0` | select a duplicate territory occurrence |
+
+## dzcli delete economy event-spawns
+
+Delete one cfgeventspawns.xml event entry
+
+### Usage
+
+```text
+dzcli delete economy event-spawns <name> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | print modified XML without writing |
+| `--file` | `` | cfgeventspawns.xml path |
+| `--occurrence` | `0` | select a duplicate event occurrence |
 
 ## dzcli delete economy limits
 
@@ -385,6 +538,24 @@ dzcli delete economy limits group member <usage|value> <group-name> <member-name
 | --- | --- | --- |
 | `--dry-run` | `false` | print modified XML without writing |
 | `--file` | `` | cfglimitsdefinitionuser.xml path |
+
+## dzcli delete economy types
+
+Delete one type entry from a types XML file
+
+### Usage
+
+```text
+dzcli delete economy types <type-name> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | print modified XML without writing |
+| `--file` | `` | types.xml path |
+| `--occurrence` | `0` | select a duplicate type occurrence |
 
 ## dzcli delete expansion
 
@@ -547,8 +718,59 @@ dzcli get economy
 
 | Command | Description |
 | --- | --- |
+| `environment` | List cfgenvironment.xml file references |
+| `event-spawns` | List cfgeventspawns.xml event entries |
+| `events` | List db/events.xml event activity and positioning |
 | `limits` | List base limits definitions |
 | `types` | List type entries |
+
+## dzcli get economy environment
+
+List cfgenvironment.xml file references
+
+### Usage
+
+```text
+dzcli get economy environment [territory-name] [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--file` | `` | cfgenvironment.xml path |
+
+## dzcli get economy event-spawns
+
+List cfgeventspawns.xml event entries
+
+### Usage
+
+```text
+dzcli get economy event-spawns [name] [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--file` | `` | cfgeventspawns.xml path |
+
+## dzcli get economy events
+
+List db/events.xml event activity and positioning
+
+### Usage
+
+```text
+dzcli get economy events [name] [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--file` | `` | db/events.xml path |
 
 ## dzcli get economy limits
 
@@ -603,6 +825,8 @@ dzcli get economy types [name] [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--cfgeconomycore` | `` | cfgeconomycore.xml path |
+| `--compare` | `false` | compare normalized duplicate definitions |
+| `--duplicates` | `false` | list only type names defined more than once |
 | `--file` | `` | types.xml path |
 
 ## dzcli get expansion
@@ -736,7 +960,91 @@ dzcli update economy
 
 | Command | Description |
 | --- | --- |
+| `environment` | update cfgenvironment.xml references |
+| `event-spawns` | Update one cfgeventspawns.xml event entry |
 | `types` | Modify a type entry in a types XML file |
+
+## dzcli update economy environment
+
+update cfgenvironment.xml references
+
+### Usage
+
+```text
+dzcli update economy environment
+```
+
+### Commands
+
+| Command | Description |
+| --- | --- |
+| `path` | update an environment path reference |
+| `usable` | update an environment usable reference |
+
+## dzcli update economy environment path
+
+update an environment path reference
+
+### Usage
+
+```text
+dzcli update economy environment path <path> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | print modified XML without writing |
+| `--file` | `` | cfgenvironment.xml path |
+| `--occurrence` | `0` | select a duplicate reference occurrence |
+| `--scaffold` | `false` | create a missing territory XML file |
+| `--set-path` | `` | replace the registered path |
+| `--territory-occurrence` | `0` | select a duplicate territory occurrence |
+
+## dzcli update economy environment usable
+
+update an environment usable reference
+
+### Usage
+
+```text
+dzcli update economy environment usable <territory> <usable> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | print modified XML without writing |
+| `--file` | `` | cfgenvironment.xml path |
+| `--occurrence` | `0` | select a duplicate reference occurrence |
+| `--set-usable` | `` | replace the usable file name |
+| `--territory-occurrence` | `0` | select a duplicate territory occurrence |
+
+## dzcli update economy event-spawns
+
+Update one cfgeventspawns.xml event entry
+
+### Usage
+
+```text
+dzcli update economy event-spawns <name> [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--add-pos` | `[]` | add a position as x,z[,a[,y]] |
+| `--dry-run` | `false` | print modified XML without writing |
+| `--file` | `` | cfgeventspawns.xml path |
+| `--occurrence` | `0` | select a duplicate event occurrence |
+| `--remove-pos` | `[]` | remove a 1-based position occurrence |
+| `--remove-zone` | `false` | remove every zone |
+| `--rename` | `` | rename the event entry |
+| `--set-pos` | `[]` | replace positions with x,z[,a[,y]] |
+| `--set-zone` | `` | replace the zone with smin,smax,dmin,dmax,r |
 
 ## dzcli update economy types
 

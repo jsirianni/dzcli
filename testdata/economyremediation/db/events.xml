@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<events>
+  <event name="AmbientBear"><position>fixed</position><active>1</active></event>
+  <event name="AnimalCow"><position>fixed</position><active>1</active></event>
+  <event name="StaticDisabled"><position>fixed</position><active>0</active></event>
+  <event name="StaticExisting"><position>fixed</position></event>
+</events>

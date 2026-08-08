@@ -55,6 +55,15 @@ Preview an economy type update without writing the file:
 dzcli update economy types M4A1 --file ./mpmissions/dayzOffline.chernarusplus/db/types.xml --nominal 20 --min 5 --add-usage Military --dry-run
 ```
 
+Inspect duplicate type definitions and compare only their differing fields:
+
+```sh
+dzcli get economy types --cfgeconomycore ./mpmissions/dayzOffline.chernarusplus/cfgeconomycore.xml --duplicates
+dzcli get economy types M4A1 --cfgeconomycore ./mpmissions/dayzOffline.chernarusplus/cfgeconomycore.xml --compare
+```
+
+Economy validation warnings now print either one or more PowerShell-safe scoped `dzcli` remediation commands or an explicit `validation-only` manual-edit notice. Event-spawn and environment-reference commands support `--dry-run` so agents can preview localized XML edits before applying them; scaffolded territory files are path-contained and rolled back if the environment-reference write fails.
+
 Create an Expansion AI loadout file:
 
 ```sh

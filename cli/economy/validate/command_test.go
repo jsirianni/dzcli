@@ -90,6 +90,17 @@ func TestPrintWarningsWritesEachWarning(t *testing.T) {
 	assertContains(t, stdout.String(), "types types.xml warning: second")
 }
 
+func TestValidateEconomyPrintsActionableAndManualRemediation(t *testing.T) {
+	var stdout bytes.Buffer
+	if err := ValidateEconomy(fixturePath(t, "economyremediation"), &stdout); err != nil {
+		t.Fatalf("ValidateEconomy returned error: %v", err)
+	}
+	output := stdout.String()
+	assertContains(t, output, "remediation: dzcli delete economy types 'WoodenLog'")
+	assertContains(t, output, "remediation: dzcli create economy event-spawns 'AnimalCow'")
+	assertContains(t, output, "remediation: validation-only; edit the XML manually")
+}
+
 func fixturePath(t *testing.T, parts ...string) string {
 	t.Helper()
 

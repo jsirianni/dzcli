@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<types>
+  <!-- unrelated content survives duplicate deletion -->
+  <type name="WoodenLog">
+    <nominal>2</nominal>
+  </type>
+</types>
