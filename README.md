@@ -4,6 +4,11 @@
 
 It works with server config, gameplay config, weather config, economy XML, DayZ init scripts, and Expansion AI files.
 
+## Documentation
+
+- [Usage docs](docs/README.md)
+- [Generated command reference](docs/commands.md)
+
 ## Help
 
 Show the top-level command list:
@@ -18,7 +23,23 @@ Show help for a specific command:
 dzcli update economy types --help
 ```
 
-The generated command reference is in `docs/commands.md`.
+Use command help when building scripts or checking flags:
+
+```sh
+dzcli validate economy --help
+```
+
+## Using dzcli With AI Agents
+
+`dzcli` is useful when an AI agent needs to inspect, validate, or modify large DayZ XML files without reading or rewriting the whole file by hand.
+
+Recommended workflow:
+
+1. Inspect the command surface with `dzcli --help` and command-specific `--help`.
+2. Use `get` and `validate` commands to inspect the target file before changing it.
+3. Use scoped update commands instead of manual XML edits.
+4. Run mutation commands with `--dry-run` first and review the output.
+5. Run the matching `validate` command after writing changes.
 
 ## Examples
 
