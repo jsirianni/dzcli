@@ -23,6 +23,12 @@ Show help for a specific command:
 dzcli update economy types --help
 ```
 
+Show the installed version:
+
+```sh
+dzcli version
+```
+
 Use command help when building scripts or checking flags:
 
 ```sh
