@@ -288,6 +288,8 @@ After economy changes, validate the mission:
 dzcli validate economy ./mpmissions/dayzOffline.chernarusplus
 ```
 
+Full mission-root economy validation requires `cfgeconomycore.xml` at the resolved mission root. If a repository contains only a partial economy folder, run `dzcli validate xml <file-or-dir>` for an XML well-formedness check until standalone economy-file semantic validation is available.
+
 Compact validation output groups repeated economy warning classes, including missing fixed event spawns, missing presets or territory files, duplicate type definitions, undefined type limit references, and repeated scalar relationship issues. In full warning output, each warning is followed by a concrete remediation command when dzcli can safely address it; validation-only findings explicitly require manual XML editing. Missing event-spawn warnings exclude disabled fixed events and events backed by a matching, registered, existing environment territory file.
 
 Preview all supported findings as an ordered plan:

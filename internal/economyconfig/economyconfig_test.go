@@ -3,6 +3,7 @@ package economyconfig
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -603,6 +604,22 @@ func TestInspectEconomyValidatesAggregateMissionAndWarns(t *testing.T) {
 	assertContains(t, allWarnings(statuses), `random preset "missingPreset"`)
 	assertContains(t, allWarnings(statuses), `missing territory file "env/missing_territories.xml"`)
 	assertContains(t, allWarnings(statuses), `usable file "unregistered_territories"`)
+}
+
+func TestInspectEconomyReportsMissingEconomyCoreForPartialFolder(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "db", "types.xml"), `<?xml version="1.0" encoding="UTF-8"?><types />`)
+
+	_, err := InspectEconomy(root)
+
+	var missing MissingEconomyCoreError
+	if !errors.As(err, &missing) {
+		t.Fatalf("err = %v, want MissingEconomyCoreError", err)
+	}
+	assertEqual(t, missing.MissionRoot, root)
+	assertEqual(t, missing.CorePath, filepath.Join(root, "cfgeconomycore.xml"))
+	assertContains(t, err.Error(), "full mission-root economy validation requires cfgeconomycore.xml")
+	assertContains(t, err.Error(), "dzcli validate xml <file-or-dir>")
 }
 
 func TestInspectEconomyErrorPaths(t *testing.T) {

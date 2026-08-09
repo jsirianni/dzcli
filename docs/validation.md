@@ -22,13 +22,15 @@ Validate a `cfgeconomycore.xml` file:
 dzcli validate economy ./mpmissions/dayzOffline.chernarusplus/cfgeconomycore.xml
 ```
 
-Validate one economy file:
+Validate from a known economy file in a complete mission root:
 
 ```sh
 dzcli validate economy ./mpmissions/dayzOffline.chernarusplus/db/types.xml
 ```
 
-Use this after changing `types.xml`, `cfgeconomycore.xml`, `cfglimitsdefinition.xml`, `cfglimitsdefinitionuser.xml`, or economy files referenced by `cfgeconomycore.xml`.
+`validate economy` performs full mission-root economy validation even when started from a known economy file. The resolved mission root must contain `cfgeconomycore.xml`. For partial economy folders without `cfgeconomycore.xml`, use `dzcli validate xml <file-or-dir>` for XML well-formedness until standalone economy-file semantic validation is available.
+
+Use economy validation after changing `types.xml`, `cfgeconomycore.xml`, `cfglimitsdefinition.xml`, `cfglimitsdefinitionuser.xml`, or economy files referenced by `cfgeconomycore.xml`.
 
 Economy warnings remain non-fatal. Compact output groups repeated warning classes such as missing fixed event spawns, missing presets or territory files, duplicate type definitions, and repeated type relationship issues. Full warning output follows every finding with either a scoped `dzcli` remediation command or `validation-only; edit the XML manually`. Parsing and schema errors remain fatal and return a non-zero exit code.
 
