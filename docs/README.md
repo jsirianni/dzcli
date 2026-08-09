@@ -3,7 +3,7 @@
 This directory contains handwritten usage guides and generated command reference material.
 
 - [Agents](agents.md): workflow guidance for agents working with large DayZ files.
-- [Validation](validation.md): validation commands for XML, economy, server, gameplay, weather, init, and Expansion AI files.
+- [Validation](validation.md): validation commands for repositories, XML, economy, server, gameplay, weather, init, and Expansion AI files.
 - [Economy](economy.md): central economy types, limits, event spawns, and environment-reference workflows.
 - [Server and Gameplay](server-and-gameplay.md): serverDZ.cfg and cfggameplay.json workflows.
 - [Expansion AI](expansion-ai.md): loadout and patrol workflows.

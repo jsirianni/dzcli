@@ -163,6 +163,11 @@ func ValidateXMLPathJSON(path string, stdout io.Writer) error {
 	return nil
 }
 
+// TextStatuses converts XML validation statuses to shared text-rendering statuses.
+func TextStatuses(statuses []FileStatus) []validation.TextStatus {
+	return xmlTextStatuses(statuses)
+}
+
 func xmlTextStatuses(statuses []FileStatus) []validation.TextStatus {
 	result := make([]validation.TextStatus, 0, len(statuses))
 	for _, status := range statuses {

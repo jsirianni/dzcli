@@ -510,6 +510,58 @@ func TestRunReportsWeatherValidation(t *testing.T) {
 	assertContains(t, stdout.String(), "less than or equal")
 }
 
+func TestRunValidateAllReportsRepositoryValidation(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	repo := t.TempDir()
+	serverRoot := filepath.Join(repo, "server-one")
+	if err := os.MkdirAll(filepath.Join(serverRoot, "mpmissions"), 0o755); err != nil {
+		t.Fatalf("create server fixture: %v", err)
+	}
+	serverConfig, err := os.ReadFile(fixturePath(t, "serverconfig", "valid.cfg"))
+	if err != nil {
+		t.Fatalf("read server config fixture: %v", err)
+	}
+	writeTestFile(t, filepath.Join(serverRoot, "serverDZ.cfg"), string(serverConfig))
+	missionRoot := filepath.Join(serverRoot, "mpmissions", "dayzOffline.test")
+	if err := os.CopyFS(missionRoot, os.DirFS(fixturePath(t, "mission"))); err != nil {
+		t.Fatalf("copy mission fixture: %v", err)
+	}
+
+	code := Run([]string{"validate", "all", repo}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	assertContains(t, stdout.String(), "server "+filepath.Join(serverRoot, "serverDZ.cfg")+" ok")
+	assertContains(t, stdout.String(), "cfgeconomycore "+filepath.Join(missionRoot, "cfgeconomycore.xml")+" ok")
+	assertContains(t, stdout.String(), "xml "+filepath.Join(missionRoot, "cfgeconomycore.xml")+" ok")
+}
+
+func TestRunValidateRepoAliasWritesJSONEnvelope(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	repo := t.TempDir()
+	brokenXML := filepath.Join(repo, "server-one", "mpmissions", "partial", "broken.xml")
+	if err := os.MkdirAll(filepath.Dir(brokenXML), 0o755); err != nil {
+		t.Fatalf("create XML fixture directory: %v", err)
+	}
+	writeTestFile(t, brokenXML, `<broken>`)
+
+	code := Run([]string{"--output", "json", "validate", "repo", repo}, &stdout, &stderr)
+
+	assertEqual(t, code, FailureExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	assertEqual(t, envelope["status"].(string), "failed")
+	assertEqual(t, envelope["target_path"].(string), repo)
+	files := jsonArray(t, jsonObject(t, envelope["data"])["files"])
+	assertEqual(t, len(files), 1)
+	file := jsonObject(t, files[0])
+	assertEqual(t, file["kind"].(string), "xml")
+	assertEqual(t, file["status"].(string), "failed")
+	assertContains(t, file["target_path"].(string), "broken.xml")
+}
+
 func TestRunXMLValidateReturnsFailureForInvalidXML(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

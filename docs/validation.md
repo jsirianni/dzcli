@@ -8,6 +8,30 @@ Text output keeps `ok` and `failed` status lines one per file. Warning output de
 
 For exact command syntax, see [commands.md](commands.md).
 
+## Repository-Wide Validation
+
+Validate a repository, a directory containing multiple server roots, or a single server root:
+
+```sh
+dzcli validate all ./servers
+```
+
+`validate repo` is an alias:
+
+```sh
+dzcli validate repo ./servers
+```
+
+Use JSON output for automation:
+
+```sh
+dzcli --output json validate all ./servers
+```
+
+The command discovers server roots, validates `serverDZ.cfg` when present, checks mission-root `cfggameplay.json`, `cfgweather.xml`, and `init.c`, runs central economy validation only for mission folders containing `cfgeconomycore.xml`, inspects Expansion AI config roots, and validates XML trees under each discovered server root.
+
+Mission folders without `cfgeconomycore.xml` skip economy validation. This avoids false failures for partial economy folders, but XML files in those folders are still included in the repository-wide XML pass.
+
 ## Central Economy
 
 Validate a whole mission economy folder:
