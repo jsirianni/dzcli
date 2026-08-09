@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"dzcli/cli/output"
 	"dzcli/internal/economy"
 
 	"github.com/spf13/cobra"
@@ -22,13 +23,16 @@ func NewGetEventsCommand(stdout io.Writer) *cobra.Command {
 		Use:   "events [name]",
 		Short: "List db/events.xml event activity and positioning",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if file == "" {
 				return fmt.Errorf("--file is required")
 			}
 			filter := ""
 			if len(args) == 1 {
 				filter = args[0]
+			}
+			if output.IsJSON(cmd) {
+				return listEventsJSON(file, filter, stdout)
 			}
 			entries, err := economy.ListEconomyEventsFile(file)
 			if err != nil {
@@ -69,13 +73,16 @@ func NewGetEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 		Use:   "event-spawns [name]",
 		Short: "List cfgeventspawns.xml event entries",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if file == "" {
 				return fmt.Errorf("--file is required")
 			}
 			filter := ""
 			if len(args) == 1 {
 				filter = args[0]
+			}
+			if output.IsJSON(cmd) {
+				return listEventSpawnsJSON(file, filter, stdout)
 			}
 			entries, err := economy.ListEventSpawnsFile(file)
 			if err != nil {
@@ -162,10 +169,14 @@ func NewCreateEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := outputMutation(file, "event-spawns", mutation, dryRun, stdout); err != nil {
+			warnings := []output.Diagnostic{}
+			if placeholder {
+				warnings = append(warnings, placeholderEventZoneWarning(file))
+			}
+			if err := outputMutationForCommand(cmd, file, "event-spawns", mutation, dryRun, stdout, warnings); err != nil {
 				return err
 			}
-			if placeholder {
+			if placeholder && !output.IsJSON(cmd) {
 				fmt.Fprintln(stdout, "warning: placeholder event zone satisfies validation only and may not provide useful gameplay behavior")
 			}
 			return nil
@@ -249,10 +260,14 @@ func NewUpdateEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := outputMutation(file, "event-spawns", mutation, dryRun, stdout); err != nil {
+			warnings := []output.Diagnostic{}
+			if scaffoldPlaceholder {
+				warnings = append(warnings, placeholderEventZoneWarning(file))
+			}
+			if err := outputMutationForCommand(cmd, file, "event-spawns", mutation, dryRun, stdout, warnings); err != nil {
 				return err
 			}
-			if scaffoldPlaceholder {
+			if scaffoldPlaceholder && !output.IsJSON(cmd) {
 				fmt.Fprintln(stdout, "warning: placeholder event zone satisfies validation only and may not provide useful gameplay behavior")
 			}
 			return nil
@@ -292,7 +307,7 @@ func NewDeleteEventSpawnsCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(file, "event-spawns", mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, file, "event-spawns", mutation, dryRun, stdout, nil)
 		},
 	}
 	command.SetOut(stdout)
@@ -308,13 +323,16 @@ func NewGetEnvironmentCommand(stdout io.Writer) *cobra.Command {
 		Use:   "environment [territory-name]",
 		Short: "List cfgenvironment.xml file references",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if file == "" {
 				return fmt.Errorf("--file is required")
 			}
 			filter := ""
 			if len(args) == 1 {
 				filter = args[0]
+			}
+			if output.IsJSON(cmd) {
+				return listEnvironmentJSON(file, filter, stdout)
 			}
 			refs, err := economy.ListEnvironmentReferencesFile(file)
 			if err != nil {
@@ -435,6 +453,9 @@ func newEnvironmentReferenceCommand(action economy.EnvironmentAction, kind strin
 				return err
 			}
 			if dryRun {
+				if output.IsJSON(cmd) {
+					return output.WriteMutation(stdout, file, "environment", mutation.Changed, true, "application/xml", mutation.Data, nil)
+				}
 				_, err = stdout.Write(mutation.Data)
 				return err
 			}
@@ -459,6 +480,13 @@ func newEnvironmentReferenceCommand(action economy.EnvironmentAction, kind strin
 					}
 				}
 				return err
+			}
+			warnings := []output.Diagnostic{}
+			if scaffoldCreated && (scaffold || len(territoryZones) == 0) {
+				warnings = append(warnings, territoryScaffoldWarning(file))
+			}
+			if output.IsJSON(cmd) {
+				return output.WriteMutation(stdout, file, "environment", mutation.Changed, false, "application/xml", mutation.Data, warnings)
 			}
 			fmt.Fprintf(stdout, "environment %s ok\n", file)
 			if scaffoldCreated && (scaffold || len(territoryZones) == 0) {
@@ -530,6 +558,81 @@ func eventSpawnStatus(entry economy.EventSpawnEntry) string {
 	return "invalid: " + strings.Join(entry.Issues, "; ")
 }
 
+func listEventsJSON(file string, filter string, stdout io.Writer) error {
+	entries, err := economy.ListEconomyEventsFile(file)
+	if err != nil {
+		return err
+	}
+	var rows [][]string
+	for _, entry := range entries {
+		if filter != "" && entry.Name != filter {
+			continue
+		}
+		active := "<absent>"
+		if entry.ActivePresent {
+			active = strconv.Itoa(entry.Active)
+		}
+		rows = append(rows, []string{entry.Name, strconv.Itoa(entry.Occurrence), entry.Position, active})
+	}
+	if len(rows) == 0 {
+		if filter != "" {
+			return fmt.Errorf("event %q not found", filter)
+		}
+		return fmt.Errorf("no event resources found")
+	}
+	return output.WriteTableRows(stdout, file, []string{"NAME", "OCCURRENCE", "POSITION", "ACTIVE"}, rows)
+}
+
+func listEventSpawnsJSON(file string, filter string, stdout io.Writer) error {
+	entries, err := economy.ListEventSpawnsFile(file)
+	if err != nil {
+		return err
+	}
+	var rows [][]string
+	for _, entry := range entries {
+		if filter != "" && entry.Name != filter {
+			continue
+		}
+		name := entry.Name
+		if name == "" {
+			name = "<missing>"
+		}
+		rows = append(rows, []string{name, strconv.Itoa(entry.Occurrence), formatPositions(entry.Positions), formatZones(entry.Zones), eventSpawnStatus(entry)})
+	}
+	if len(rows) == 0 {
+		if filter != "" {
+			return fmt.Errorf("event spawn %q not found", filter)
+		}
+		return fmt.Errorf("no event spawn resources found")
+	}
+	return output.WriteTableRows(stdout, file, []string{"NAME", "OCCURRENCE", "POSITIONS", "ZONES", "STATUS"}, rows)
+}
+
+func listEnvironmentJSON(file string, filter string, stdout io.Writer) error {
+	refs, err := economy.ListEnvironmentReferencesFile(file)
+	if err != nil {
+		return err
+	}
+	var rows [][]string
+	for _, ref := range refs {
+		if filter != "" && ref.Territory != filter {
+			continue
+		}
+		rows = append(rows, []string{
+			ref.Kind,
+			ref.Value,
+			ref.Territory,
+			strconv.Itoa(ref.Occurrence),
+			strconv.Itoa(ref.TerritoryOccurrence),
+			strconv.FormatBool(ref.Exists),
+		})
+	}
+	if len(rows) == 0 {
+		return fmt.Errorf("no environment references found")
+	}
+	return output.WriteTableRows(stdout, file, []string{"KIND", "VALUE", "TERRITORY", "OCCURRENCE", "TERRITORY-OCCURRENCE", "EXISTS"}, rows)
+}
+
 func outputMutation(path string, kind string, mutation economy.FileMutation, dryRun bool, stdout io.Writer) error {
 	if dryRun {
 		_, err := stdout.Write(mutation.Data)
@@ -540,4 +643,29 @@ func outputMutation(path string, kind string, mutation economy.FileMutation, dry
 	}
 	fmt.Fprintf(stdout, "%s %s ok\n", kind, path)
 	return nil
+}
+
+func outputMutationForCommand(cmd *cobra.Command, path string, kind string, mutation economy.FileMutation, dryRun bool, stdout io.Writer, warnings []output.Diagnostic) error {
+	if output.IsJSON(cmd) {
+		return output.WriteMutation(stdout, path, kind, mutation.Changed, dryRun, "application/xml", mutation.Data, warnings)
+	}
+	return outputMutation(path, kind, mutation, dryRun, stdout)
+}
+
+func placeholderEventZoneWarning(path string) output.Diagnostic {
+	return output.DiagnosticForWarning(
+		"event-spawns",
+		path,
+		"placeholder event zone satisfies validation only and may not provide useful gameplay behavior",
+		nil,
+	)
+}
+
+func territoryScaffoldWarning(path string) output.Diagnostic {
+	return output.DiagnosticForWarning(
+		"environment",
+		path,
+		"territory scaffold is validation-only and does not contain live spawn zones",
+		nil,
+	)
 }

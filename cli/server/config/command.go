@@ -7,6 +7,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"dzcli/cli/output"
 	"dzcli/cli/validation"
 	"dzcli/internal/serverconfig"
 
@@ -26,6 +27,9 @@ func NewGetCommand(stdout io.Writer) *cobra.Command {
 			if len(args) == 1 {
 				filter = serverconfig.NormalizeField(args[0])
 			}
+			if output.IsJSON(cmd) {
+				return listConfigJSON(file, filter, stdout)
+			}
 			return ListConfig(file, filter, stdout)
 		},
 	}
@@ -40,6 +44,9 @@ func NewValidateCommand(stdout io.Writer) *cobra.Command {
 		Short: "Validate serverDZ.cfg",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if output.IsJSON(cmd) {
+				return validateConfigJSON(args[0], stdout)
+			}
 			return ValidateConfig(args[0], stdout)
 		},
 	}
@@ -68,6 +75,9 @@ func NewUpdateCommand(stdin io.Reader, stdout io.Writer) *cobra.Command {
 				return err
 			}
 			if existed && !force && !dryRun {
+				if output.IsJSON(cmd) {
+					return writeInteractiveFailure(stdout, file, "server")
+				}
 				confirmed, err := confirmOverwrite(stdin, stdout, serverconfig.NormalizeField(args[0]), file)
 				if err != nil {
 					return err
@@ -77,7 +87,7 @@ func NewUpdateCommand(stdin io.Reader, stdout io.Writer) *cobra.Command {
 					return nil
 				}
 			}
-			return outputMutation(file, mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, file, mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -104,7 +114,7 @@ func NewDeleteCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(file, mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, file, mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -119,6 +129,19 @@ func ValidateConfig(path string, stdout io.Writer) error {
 		return validation.ErrFailed
 	}
 	fmt.Fprintf(stdout, "server %s ok\n", path)
+	return nil
+}
+
+func validateConfigJSON(path string, stdout io.Writer) error {
+	err := serverconfig.ValidateFile(path)
+	if writeErr := output.WriteValidation(stdout, path, []output.ValidationFile{
+		output.SimpleValidationFile("server", path, "", err),
+	}); writeErr != nil {
+		return writeErr
+	}
+	if err != nil {
+		return validation.ErrFailed
+	}
 	return nil
 }
 
@@ -147,6 +170,33 @@ func ListConfig(file string, filter string, stdout io.Writer) error {
 	return nil
 }
 
+func listConfigJSON(file string, filter string, stdout io.Writer) error {
+	if file == "" {
+		return fmt.Errorf("--file is required")
+	}
+	values, err := serverconfig.ListFieldsFile(file)
+	if err != nil {
+		return err
+	}
+	values = serverconfig.SortFieldValues(values)
+	rows := []map[string]any{}
+	for _, value := range values {
+		if filter == "" || value.Field == filter {
+			rows = append(rows, map[string]any{
+				"field": value.Field,
+				"value": value.Value,
+			})
+		}
+	}
+	if len(rows) == 0 {
+		if filter != "" {
+			return fmt.Errorf("server config field %q not found", filter)
+		}
+		return fmt.Errorf("no server config fields found")
+	}
+	return output.WriteRows(stdout, file, rows)
+}
+
 func confirmOverwrite(stdin io.Reader, stdout io.Writer, field string, file string) (bool, error) {
 	fmt.Fprintf(stdout, "Overwrite %s in %s? [y/N]: ", field, file)
 	answer, err := bufio.NewReader(stdin).ReadString('\n')
@@ -167,6 +217,21 @@ func outputMutation(path string, mutation serverconfig.FileMutation, dryRun bool
 	}
 	fmt.Fprintf(stdout, "server %s ok\n", path)
 	return nil
+}
+
+func outputMutationForCommand(cmd *cobra.Command, path string, mutation serverconfig.FileMutation, dryRun bool, stdout io.Writer) error {
+	if output.IsJSON(cmd) {
+		return output.WriteMutation(stdout, path, "server", mutation.Changed, dryRun, "text/plain", mutation.Data, nil)
+	}
+	return outputMutation(path, mutation, dryRun, stdout)
+}
+
+func writeInteractiveFailure(stdout io.Writer, path string, kind string) error {
+	err := fmt.Errorf("interactive confirmation is disabled for json output")
+	if writeErr := output.WriteFailure(stdout, err, kind, path, output.InteractiveRemediation()); writeErr != nil {
+		return writeErr
+	}
+	return output.ErrRendered
 }
 
 func printTable(stdout io.Writer, headers []string, rows [][]string) {

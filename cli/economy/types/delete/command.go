@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"dzcli/cli/output"
 	"dzcli/internal/economy"
 
 	"github.com/spf13/cobra"
@@ -27,6 +28,9 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 			mutation, err := economy.DeleteTypeFile(file, options)
 			if err != nil {
 				return err
+			}
+			if output.IsJSON(cmd) {
+				return output.WriteMutation(stdout, file, "types", mutation.Changed, dryRun, "application/xml", mutation.Data, nil)
 			}
 			if dryRun {
 				_, err = stdout.Write(mutation.Data)

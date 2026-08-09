@@ -24,6 +24,12 @@ dzcli
 | `validate` | Validate DayZ configuration files |
 | `version` | Print dzcli version |
 
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli create
 
 Create DayZ configuration resources
@@ -40,6 +46,12 @@ dzcli create
 | --- | --- |
 | `economy` | Modify DayZ central economy resources |
 | `expansion` | Modify DayZ Expansion mod resources |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli create economy
 
@@ -59,6 +71,12 @@ dzcli create economy
 | `event-spawns` | Create a cfgeventspawns.xml event entry |
 | `limits` | create a base limits definition |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli create economy environment
 
 create cfgenvironment.xml references
@@ -75,6 +93,12 @@ dzcli create economy environment
 | --- | --- |
 | `path` | create an environment path reference |
 | `usable` | create an environment usable reference |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli create economy environment path
 
@@ -98,6 +122,12 @@ dzcli create economy environment path <path> [flags]
 | `--territory-occurrence` | `0` | select a duplicate territory occurrence |
 | `--zone` | `[]` | live zone as name,smin,smax,dmin,dmax,x,z,r |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli create economy environment usable
 
 create an environment usable reference
@@ -116,6 +146,12 @@ dzcli create economy environment usable <territory> <usable> [flags]
 | `--file` | `` | cfgenvironment.xml path |
 | `--occurrence` | `0` | select a duplicate reference occurrence |
 | `--territory-occurrence` | `0` | select a duplicate territory occurrence |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli create economy event-spawns
 
@@ -139,6 +175,12 @@ dzcli create economy event-spawns <name> [flags]
 | `--source-occurrence` | `0` | select a duplicate source event occurrence |
 | `--zone` | `` | zone as smin,smax,dmin,dmax,r |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli create economy limits
 
 create a base limits definition
@@ -161,6 +203,12 @@ dzcli create economy limits <category|tag|usage|value> <name> [flags]
 | --- | --- | --- |
 | `--dry-run` | `false` | print modified XML without writing |
 | `--file` | `` | cfglimitsdefinition.xml path |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli create economy limits group
 
@@ -186,6 +234,12 @@ dzcli create economy limits group <usage|value> <group-name> [flags]
 | `--file` | `` | cfglimitsdefinitionuser.xml path |
 | `--member` | `[]` | group member name |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli create economy limits group member
 
 create a user limits group member
@@ -203,6 +257,12 @@ dzcli create economy limits group member <usage|value> <group-name> <member-name
 | `--dry-run` | `false` | print modified XML without writing |
 | `--file` | `` | cfglimitsdefinitionuser.xml path |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli create expansion
 
 Modify DayZ Expansion mod resources
@@ -218,6 +278,12 @@ dzcli create expansion
 | Command | Description |
 | --- | --- |
 | `ai` | Modify DayZ Expansion AI resources |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli create expansion ai
 
@@ -235,6 +301,12 @@ dzcli create expansion ai
 | --- | --- |
 | `loadouts` | Create a loadout file |
 | `patrols` | Append a patrol definition |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli create expansion ai loadouts
 
@@ -271,6 +343,12 @@ dzcli create expansion ai loadouts <name> [flags]
 | `--remove-health` | `[]` | remove health by zone |
 | `--set-construction-part` | `[]` | replace ConstructionPartsBuilt |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli create expansion ai loadouts item
 
 Add a nested loadout item
@@ -302,6 +380,12 @@ dzcli create expansion ai loadouts item <loadout-name> [flags]
 | `--remove-health` | `[]` | remove health by zone |
 | `--set-construction-part` | `[]` | replace ConstructionPartsBuilt |
 | `--slot` | `` | attachment slot name |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli create expansion ai patrols
 
@@ -372,6 +456,12 @@ dzcli create expansion ai patrols <name> [flags]
 | `--waypoint` | `[]` | replace Waypoints with x,y,z |
 | `--waypoint-interpolation` | `` | set waypoint-interpolation |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli delete
 
 Delete DayZ configuration resources
@@ -390,6 +480,12 @@ dzcli delete
 | `expansion` | Modify DayZ Expansion mod resources |
 | `gameplay` | Remove a cfggameplay.json field |
 | `server` | Remove a serverDZ.cfg field |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli delete economy
 
@@ -410,6 +506,12 @@ dzcli delete economy
 | `limits` | delete a base limits definition |
 | `types` | Delete one type entry from a types XML file |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli delete economy environment
 
 delete cfgenvironment.xml references
@@ -426,6 +528,12 @@ dzcli delete economy environment
 | --- | --- |
 | `path` | delete an environment path reference |
 | `usable` | delete an environment usable reference |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli delete economy environment path
 
@@ -446,6 +554,12 @@ dzcli delete economy environment path <path> [flags]
 | `--occurrence` | `0` | select a duplicate reference occurrence |
 | `--territory-occurrence` | `0` | select a duplicate territory occurrence |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli delete economy environment usable
 
 delete an environment usable reference
@@ -465,6 +579,12 @@ dzcli delete economy environment usable <territory> <usable> [flags]
 | `--occurrence` | `0` | select a duplicate reference occurrence |
 | `--territory-occurrence` | `0` | select a duplicate territory occurrence |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli delete economy event-spawns
 
 Delete one cfgeventspawns.xml event entry
@@ -482,6 +602,12 @@ dzcli delete economy event-spawns <name> [flags]
 | `--dry-run` | `false` | print modified XML without writing |
 | `--file` | `` | cfgeventspawns.xml path |
 | `--occurrence` | `0` | select a duplicate event occurrence |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli delete economy limits
 
@@ -506,6 +632,12 @@ dzcli delete economy limits <category|tag|usage|value> <name> [flags]
 | `--dry-run` | `false` | print modified XML without writing |
 | `--file` | `` | cfglimitsdefinition.xml path |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli delete economy limits group
 
 delete a user limits group
@@ -529,6 +661,12 @@ dzcli delete economy limits group <usage|value> <group-name> [flags]
 | `--dry-run` | `false` | print modified XML without writing |
 | `--file` | `` | cfglimitsdefinitionuser.xml path |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli delete economy limits group member
 
 delete a user limits group member
@@ -545,6 +683,12 @@ dzcli delete economy limits group member <usage|value> <group-name> <member-name
 | --- | --- | --- |
 | `--dry-run` | `false` | print modified XML without writing |
 | `--file` | `` | cfglimitsdefinitionuser.xml path |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli delete economy types
 
@@ -564,6 +708,12 @@ dzcli delete economy types <type-name> [flags]
 | `--file` | `` | types.xml path |
 | `--occurrence` | `0` | select a duplicate type occurrence |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli delete expansion
 
 Modify DayZ Expansion mod resources
@@ -579,6 +729,12 @@ dzcli delete expansion
 | Command | Description |
 | --- | --- |
 | `ai` | Modify DayZ Expansion AI resources |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli delete expansion ai
 
@@ -596,6 +752,12 @@ dzcli delete expansion ai
 | --- | --- |
 | `loadouts` | Delete a loadout file |
 | `patrols` | Remove a patrol definition |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli delete expansion ai loadouts
 
@@ -622,6 +784,12 @@ dzcli delete expansion ai loadouts <name> [flags]
 | `--force` | `false` | delete without prompting |
 | `--patrols-file` | `` | AIPatrolSettings.json path for reference checks |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli delete expansion ai loadouts item
 
 Remove a nested loadout item
@@ -638,6 +806,12 @@ dzcli delete expansion ai loadouts item <loadout-name> <path> [flags]
 | --- | --- | --- |
 | `--dry-run` | `false` | print modified JSON without writing |
 | `--file` | `` | loadout JSON path |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli delete expansion ai patrols
 
@@ -658,6 +832,12 @@ dzcli delete expansion ai patrols [name] [flags]
 | `--index` | `0` | select a 1-based patrol index |
 | `--occurrence` | `0` | select a duplicate patrol name occurrence |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli delete gameplay
 
 Remove a cfggameplay.json field
@@ -674,6 +854,12 @@ dzcli delete gameplay <field> [flags]
 | --- | --- | --- |
 | `--dry-run` | `false` | print modified JSON without writing |
 | `--file` | `` | cfggameplay.json path |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli delete server
 
@@ -692,6 +878,12 @@ dzcli delete server <field> [flags]
 | `--dry-run` | `false` | print modified config without writing |
 | `--file` | `` | serverDZ.cfg path |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli fix
 
 Plan or apply DayZ configuration remediation
@@ -707,6 +899,12 @@ dzcli fix
 | Command | Description |
 | --- | --- |
 | `economy` | Plan or apply supported economy remediation |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli fix economy
 
@@ -726,6 +924,12 @@ dzcli fix economy <mission-root|economy-file> [flags]
 | `--apply` | `false` | apply unambiguous supported actions |
 | `--dry-run` | `false` | print the remediation plan without writing |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli get
 
 List DayZ configuration resources
@@ -744,6 +948,12 @@ dzcli get
 | `expansion` | List DayZ Expansion mod resources |
 | `gameplay` | List cfggameplay.json fields |
 | `server` | List serverDZ.cfg fields |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli get economy
 
@@ -765,6 +975,12 @@ dzcli get economy
 | `limits` | List base limits definitions |
 | `types` | List type entries |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli get economy environment
 
 List cfgenvironment.xml file references
@@ -780,6 +996,12 @@ dzcli get economy environment [territory-name] [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--file` | `` | cfgenvironment.xml path |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli get economy event-spawns
 
@@ -797,6 +1019,12 @@ dzcli get economy event-spawns [name] [flags]
 | --- | --- | --- |
 | `--file` | `` | cfgeventspawns.xml path |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli get economy events
 
 List db/events.xml event activity and positioning
@@ -812,6 +1040,12 @@ dzcli get economy events [name] [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--file` | `` | db/events.xml path |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli get economy limits
 
@@ -835,6 +1069,12 @@ dzcli get economy limits <category|tag|usage|value> [name] [flags]
 | --- | --- | --- |
 | `--file` | `` | cfglimitsdefinition.xml path |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli get economy limits group
 
 List user limits groups
@@ -850,6 +1090,12 @@ dzcli get economy limits group <usage|value> [name] [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--file` | `` | cfglimitsdefinitionuser.xml path |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli get economy types
 
@@ -870,6 +1116,12 @@ dzcli get economy types [name] [flags]
 | `--duplicates` | `false` | list only type names defined more than once |
 | `--file` | `` | types.xml path |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli get expansion
 
 List DayZ Expansion mod resources
@@ -885,6 +1137,12 @@ dzcli get expansion
 | Command | Description |
 | --- | --- |
 | `ai` | Modify DayZ Expansion AI resources |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli get expansion ai
 
@@ -903,6 +1161,12 @@ dzcli get expansion ai
 | `loadouts` | List DayZ Expansion AI loadouts |
 | `patrols` | List DayZ Expansion AI patrols |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli get expansion ai loadouts
 
 List DayZ Expansion AI loadouts
@@ -920,6 +1184,12 @@ dzcli get expansion ai loadouts [name] [flags]
 | `--file` | `` | loadout JSON path |
 | `--path` | `` | repo or server root path |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli get expansion ai patrols
 
 List DayZ Expansion AI patrols
@@ -935,6 +1205,12 @@ dzcli get expansion ai patrols [name] [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--file` | `` | AIPatrolSettings.json path |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli get gameplay
 
@@ -952,6 +1228,12 @@ dzcli get gameplay [field] [flags]
 | --- | --- | --- |
 | `--file` | `` | cfggameplay.json path |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli get server
 
 List serverDZ.cfg fields
@@ -967,6 +1249,12 @@ dzcli get server [field] [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--file` | `` | serverDZ.cfg path |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli update
 
@@ -987,6 +1275,12 @@ dzcli update
 | `gameplay` | Set a cfggameplay.json field |
 | `server` | Set a serverDZ.cfg field |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli update economy
 
 Modify DayZ central economy resources
@@ -1005,6 +1299,12 @@ dzcli update economy
 | `event-spawns` | Update one cfgeventspawns.xml event entry |
 | `types` | Modify a type entry in a types XML file |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli update economy environment
 
 update cfgenvironment.xml references
@@ -1021,6 +1321,12 @@ dzcli update economy environment
 | --- | --- |
 | `path` | update an environment path reference |
 | `usable` | update an environment usable reference |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli update economy environment path
 
@@ -1045,6 +1351,12 @@ dzcli update economy environment path <path> [flags]
 | `--territory-occurrence` | `0` | select a duplicate territory occurrence |
 | `--zone` | `[]` | live zone as name,smin,smax,dmin,dmax,x,z,r |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli update economy environment usable
 
 update an environment usable reference
@@ -1064,6 +1376,12 @@ dzcli update economy environment usable <territory> <usable> [flags]
 | `--occurrence` | `0` | select a duplicate reference occurrence |
 | `--set-usable` | `` | replace the usable file name |
 | `--territory-occurrence` | `0` | select a duplicate territory occurrence |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli update economy event-spawns
 
@@ -1091,6 +1409,12 @@ dzcli update economy event-spawns <name> [flags]
 | `--set-pos` | `[]` | replace positions with x,z[,a[,y]] |
 | `--set-zone` | `` | replace the zone with smin,smax,dmin,dmax,r |
 | `--source-occurrence` | `0` | select a duplicate source event occurrence |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli update economy types
 
@@ -1138,6 +1462,12 @@ dzcli update economy types <type-name> [flags]
 | `--set-usage` | `[]` | replace usage references |
 | `--set-value` | `[]` | replace value references |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli update expansion
 
 Modify DayZ Expansion mod resources
@@ -1153,6 +1483,12 @@ dzcli update expansion
 | Command | Description |
 | --- | --- |
 | `ai` | Modify DayZ Expansion AI resources |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli update expansion ai
 
@@ -1170,6 +1506,12 @@ dzcli update expansion ai
 | --- | --- |
 | `loadouts` | Modify the root object in a loadout file |
 | `patrols` | Modify a patrol definition |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli update expansion ai loadouts
 
@@ -1206,6 +1548,12 @@ dzcli update expansion ai loadouts <name> [flags]
 | `--remove-health` | `[]` | remove health by zone |
 | `--set-construction-part` | `[]` | replace ConstructionPartsBuilt |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli update expansion ai loadouts item
 
 Modify a nested loadout item
@@ -1234,6 +1582,12 @@ dzcli update expansion ai loadouts item <loadout-name> <path> [flags]
 | `--remove-construction-part` | `[]` | remove a construction part |
 | `--remove-health` | `[]` | remove health by zone |
 | `--set-construction-part` | `[]` | replace ConstructionPartsBuilt |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli update expansion ai patrols
 
@@ -1307,6 +1661,12 @@ dzcli update expansion ai patrols [name] [flags]
 | `--waypoint` | `[]` | replace Waypoints with x,y,z |
 | `--waypoint-interpolation` | `` | set waypoint-interpolation |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli update gameplay
 
 Set a cfggameplay.json field
@@ -1327,6 +1687,12 @@ dzcli update gameplay <field> [flags]
 | `--force` | `false` | overwrite without prompting |
 | `--value` | `[]` | field value; repeat for arrays |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli update server
 
 Set a serverDZ.cfg field
@@ -1346,6 +1712,12 @@ dzcli update server <field> [flags]
 | `--file` | `` | serverDZ.cfg path |
 | `--force` | `false` | overwrite without prompting |
 | `--value` | `[]` | field value; repeat for motd |
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate
 
@@ -1369,6 +1741,12 @@ dzcli validate
 | `weather` | Validate cfgweather.xml |
 | `xml` | Validate XML files recursively |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli validate economy
 
 Validate central economy files
@@ -1378,6 +1756,12 @@ Validate central economy files
 ```text
 dzcli validate economy <mission-root|cfgeconomycore.xml|economy-file>
 ```
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate expansion
 
@@ -1395,6 +1779,12 @@ dzcli validate expansion
 | --- | --- |
 | `ai` | Validate DayZ Expansion AI patrol and loadout files |
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli validate expansion ai
 
 Validate DayZ Expansion AI patrol and loadout files
@@ -1404,6 +1794,12 @@ Validate DayZ Expansion AI patrol and loadout files
 ```text
 dzcli validate expansion ai [path]
 ```
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate gameplay
 
@@ -1415,6 +1811,12 @@ Validate cfggameplay.json
 dzcli validate gameplay <cfggameplay.json>
 ```
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli validate init
 
 Validate DayZ mission init.c
@@ -1424,6 +1826,12 @@ Validate DayZ mission init.c
 ```text
 dzcli validate init <init.c>
 ```
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate server
 
@@ -1435,6 +1843,12 @@ Validate serverDZ.cfg
 dzcli validate server <serverDZ.cfg>
 ```
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli validate weather
 
 Validate cfgweather.xml
@@ -1444,6 +1858,12 @@ Validate cfgweather.xml
 ```text
 dzcli validate weather <cfgweather.xml>
 ```
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate xml
 
@@ -1455,6 +1875,12 @@ Validate XML files recursively
 dzcli validate xml [path]
 ```
 
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
 ## dzcli version
 
 Print dzcli version
@@ -1464,4 +1890,10 @@ Print dzcli version
 ```text
 dzcli version
 ```
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
 

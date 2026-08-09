@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"dzcli/cli/output"
 	"dzcli/cli/validation"
 	"dzcli/internal/expansion"
 
@@ -19,6 +20,9 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 			path := "."
 			if len(args) == 1 {
 				path = args[0]
+			}
+			if output.IsJSON(cmd) {
+				return ValidateAIPathJSON(path, stdout)
 			}
 			return ValidateAIPath(path, stdout)
 		},
@@ -45,6 +49,33 @@ func ValidateAIPath(path string, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "%s %s ok (%s)\n", status.Kind, status.Path, status.Summary)
 	}
 
+	if !allOK {
+		return validation.ErrFailed
+	}
+	return nil
+}
+
+func ValidateAIPathJSON(path string, stdout io.Writer) error {
+	statuses, err := expansion.InspectAIPath(path)
+	if err != nil {
+		if writeErr := output.WriteFailure(stdout, fmt.Errorf("expansion ai: failed: %w", err), "expansion-ai", path, nil); writeErr != nil {
+			return writeErr
+		}
+		return output.ErrRendered
+	}
+
+	files := make([]output.ValidationFile, 0, len(statuses))
+	allOK := true
+	for _, status := range statuses {
+		if status.Err != nil {
+			allOK = false
+		}
+		files = append(files, output.SimpleValidationFile(status.Kind, status.Path, status.Summary, status.Err))
+	}
+
+	if err := output.WriteValidation(stdout, path, files); err != nil {
+		return err
+	}
 	if !allOK {
 		return validation.ErrFailed
 	}

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"dzcli/cli/output"
 	"dzcli/internal/expansion"
 
 	"github.com/spf13/cobra"
@@ -47,7 +48,7 @@ func NewCreateCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(targetFile, "loadouts", mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, targetFile, "loadouts", mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -77,7 +78,7 @@ func NewUpdateCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(targetFile, "loadouts", mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, targetFile, "loadouts", mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -106,10 +107,16 @@ func NewDeleteCommandWithInput(stdin io.Reader, stdout io.Writer) *cobra.Command
 				return err
 			}
 			if dryRun {
+				if output.IsJSON(cmd) {
+					return writeDeletePlanJSON(stdout, targetFile, plan, true)
+				}
 				printDeletePlan(stdout, plan)
 				return nil
 			}
 			if !force {
+				if output.IsJSON(cmd) {
+					return writeInteractiveFailure(stdout, targetFile, "loadouts")
+				}
 				confirmed, err := confirmDelete(stdin, stdout, plan)
 				if err != nil {
 					return err
@@ -121,6 +128,9 @@ func NewDeleteCommandWithInput(stdin io.Reader, stdout io.Writer) *cobra.Command
 			}
 			if err := deleteLoadoutFile(targetFile); err != nil {
 				return err
+			}
+			if output.IsJSON(cmd) {
+				return writeDeletePlanJSON(stdout, targetFile, plan, false)
 			}
 			fmt.Fprintf(stdout, "loadouts %s ok\n", targetFile)
 			return nil
@@ -169,7 +179,7 @@ func newItemAddCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(targetFile, "loadouts", mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, targetFile, "loadouts", mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -201,7 +211,7 @@ func newItemUpdateCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(targetFile, "loadouts", mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, targetFile, "loadouts", mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -226,7 +236,7 @@ func newItemRemoveCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(targetFile, "loadouts", mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, targetFile, "loadouts", mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -373,6 +383,19 @@ func printDeletePlan(stdout io.Writer, plan expansion.LoadoutDeletePlan) {
 	fmt.Fprintf(stdout, "loadouts %s would delete\n", plan.Path)
 }
 
+func writeDeletePlanJSON(stdout io.Writer, targetFile string, plan expansion.LoadoutDeletePlan, dryRun bool) error {
+	return output.Write(stdout, output.Envelope{
+		Status:     output.StatusOK,
+		TargetPath: targetFile,
+		Data: map[string]any{
+			"kind":       "loadouts",
+			"dry_run":    dryRun,
+			"deleted":    !dryRun,
+			"references": plan.References,
+		},
+	})
+}
+
 func outputMutation(path string, kind string, mutation expansion.FileMutation, dryRun bool, stdout io.Writer) error {
 	if dryRun {
 		_, err := stdout.Write(mutation.Data)
@@ -383,4 +406,19 @@ func outputMutation(path string, kind string, mutation expansion.FileMutation, d
 	}
 	fmt.Fprintf(stdout, "%s %s ok\n", kind, path)
 	return nil
+}
+
+func outputMutationForCommand(cmd *cobra.Command, path string, kind string, mutation expansion.FileMutation, dryRun bool, stdout io.Writer) error {
+	if output.IsJSON(cmd) {
+		return output.WriteMutation(stdout, path, kind, mutation.Changed, dryRun, "application/json", mutation.Data, nil)
+	}
+	return outputMutation(path, kind, mutation, dryRun, stdout)
+}
+
+func writeInteractiveFailure(stdout io.Writer, path string, kind string) error {
+	err := fmt.Errorf("interactive confirmation is disabled for json output")
+	if writeErr := output.WriteFailure(stdout, err, kind, path, output.InteractiveRemediation()); writeErr != nil {
+		return writeErr
+	}
+	return output.ErrRendered
 }

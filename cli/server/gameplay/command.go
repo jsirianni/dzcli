@@ -7,6 +7,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"dzcli/cli/output"
 	"dzcli/cli/validation"
 	"dzcli/internal/gameplayconfig"
 
@@ -26,6 +27,9 @@ func NewGetCommand(stdout io.Writer) *cobra.Command {
 			if len(args) == 1 {
 				filter = gameplayconfig.NormalizeField(args[0])
 			}
+			if output.IsJSON(cmd) {
+				return listGameplayJSON(file, filter, stdout)
+			}
 			return ListGameplay(file, filter, stdout)
 		},
 	}
@@ -40,6 +44,9 @@ func NewValidateCommand(stdout io.Writer) *cobra.Command {
 		Short: "Validate cfggameplay.json",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if output.IsJSON(cmd) {
+				return validateGameplayJSON(args[0], stdout)
+			}
 			return ValidateGameplay(args[0], stdout)
 		},
 	}
@@ -66,6 +73,9 @@ func NewUpdateCommand(stdin io.Reader, stdout io.Writer) *cobra.Command {
 				return err
 			}
 			if existed && !force && !dryRun {
+				if output.IsJSON(cmd) {
+					return writeInteractiveFailure(stdout, file, "gameplay")
+				}
 				confirmed, err := confirmOverwrite(stdin, stdout, gameplayconfig.NormalizeField(args[0]), file)
 				if err != nil {
 					return err
@@ -75,7 +85,7 @@ func NewUpdateCommand(stdin io.Reader, stdout io.Writer) *cobra.Command {
 					return nil
 				}
 			}
-			return outputMutation(file, mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, file, mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -102,7 +112,7 @@ func NewDeleteCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(file, mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, file, mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -117,6 +127,19 @@ func ValidateGameplay(path string, stdout io.Writer) error {
 		return validation.ErrFailed
 	}
 	fmt.Fprintf(stdout, "gameplay %s ok\n", path)
+	return nil
+}
+
+func validateGameplayJSON(path string, stdout io.Writer) error {
+	err := gameplayconfig.ValidateFile(path)
+	if writeErr := output.WriteValidation(stdout, path, []output.ValidationFile{
+		output.SimpleValidationFile("gameplay", path, "", err),
+	}); writeErr != nil {
+		return writeErr
+	}
+	if err != nil {
+		return validation.ErrFailed
+	}
 	return nil
 }
 
@@ -150,6 +173,35 @@ func ListGameplay(file string, filter string, stdout io.Writer) error {
 	return nil
 }
 
+func listGameplayJSON(file string, filter string, stdout io.Writer) error {
+	if file == "" {
+		return fmt.Errorf("--file is required")
+	}
+	rows := []map[string]any{}
+	if filter != "" {
+		value, ok, err := gameplayconfig.GetFieldFile(file, filter)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("gameplay field %q not found", filter)
+		}
+		rows = append(rows, map[string]any{"field": value.Field, "value": value.Value})
+	} else {
+		values, err := gameplayconfig.ListFieldsFile(file)
+		if err != nil {
+			return err
+		}
+		for _, value := range values {
+			rows = append(rows, map[string]any{"field": value.Field, "value": value.Value})
+		}
+	}
+	if len(rows) == 0 {
+		return fmt.Errorf("no gameplay fields found")
+	}
+	return output.WriteRows(stdout, file, rows)
+}
+
 func confirmOverwrite(stdin io.Reader, stdout io.Writer, field string, file string) (bool, error) {
 	fmt.Fprintf(stdout, "Overwrite %s in %s? [y/N]: ", field, file)
 	answer, err := bufio.NewReader(stdin).ReadString('\n')
@@ -170,6 +222,21 @@ func outputMutation(path string, mutation gameplayconfig.FileMutation, dryRun bo
 	}
 	fmt.Fprintf(stdout, "gameplay %s ok\n", path)
 	return nil
+}
+
+func outputMutationForCommand(cmd *cobra.Command, path string, mutation gameplayconfig.FileMutation, dryRun bool, stdout io.Writer) error {
+	if output.IsJSON(cmd) {
+		return output.WriteMutation(stdout, path, "gameplay", mutation.Changed, dryRun, "application/json", mutation.Data, nil)
+	}
+	return outputMutation(path, mutation, dryRun, stdout)
+}
+
+func writeInteractiveFailure(stdout io.Writer, path string, kind string) error {
+	err := fmt.Errorf("interactive confirmation is disabled for json output")
+	if writeErr := output.WriteFailure(stdout, err, kind, path, output.InteractiveRemediation()); writeErr != nil {
+		return writeErr
+	}
+	return output.ErrRendered
 }
 
 func printTable(stdout io.Writer, headers []string, rows [][]string) {

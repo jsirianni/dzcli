@@ -182,6 +182,8 @@ dzcli delete expansion ai loadouts Guard --file ./profiles/ExpansionMod/Loadouts
 
 When `--patrols-file` is set, delete planning reports patrol references before removal.
 
+With `--output json`, loadout delete prompts are disabled so stdout remains one parseable envelope; use `--dry-run` for the delete plan or `--force` to delete.
+
 ## Validation Workflow
 
 After loadout or patrol changes, run:
