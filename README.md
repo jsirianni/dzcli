@@ -40,7 +40,7 @@ dzcli -o json get server --file ./serverDZ.cfg
 
 Every JSON envelope includes `status`, `target_path`, `warnings`, `failures`, `remediation`, and `data`. Validation commands put per-file results in `data.files`; `get` commands put rows in `data.rows`; mutation dry-runs put generated content under `data.content` with `dry_run: true`.
 
-Validation text output compacts repeated similar warnings once a group reaches three items. Use `--warnings full` with any `validate` command to print every warning and remediation line individually.
+Validation output compacts repeated similar warnings once a group reaches three items. Compact JSON warnings include a `group` object with `key`, `title`, `count`, example `items`, and `omitted_items` when more examples are hidden. Use `--warnings full` with any `validate` command to print or emit every warning and remediation item individually.
 
 Use command help when building scripts or checking flags:
 
@@ -90,7 +90,7 @@ dzcli get economy types --cfgeconomycore ./mpmissions/dayzOffline.chernarusplus/
 dzcli get economy types M4A1 --cfgeconomycore ./mpmissions/dayzOffline.chernarusplus/cfgeconomycore.xml --compare
 ```
 
-Economy validation warnings print either one or more PowerShell-safe scoped `dzcli` remediation commands or an explicit `validation-only` manual-edit notice. Repeated economy warnings are grouped in compact validation output; rerun with `--warnings full` when you need every per-item command. Event-spawn and environment-reference commands support `--dry-run` so agents can preview localized XML edits before applying them; scaffolded territory files are path-contained and rolled back if the environment-reference write fails.
+Economy validation warnings print either one or more PowerShell-safe scoped `dzcli` remediation commands or an explicit `validation-only` manual-edit notice. Repeated economy warnings are grouped in compact text and JSON validation output; rerun with `--warnings full` when you need every per-item command. Event-spawn and environment-reference commands support `--dry-run` so agents can preview localized XML edits before applying them; scaffolded territory files are path-contained and rolled back if the environment-reference write fails.
 
 Preview an ordered, classified remediation plan:
 

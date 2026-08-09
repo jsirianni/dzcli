@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"dzcli/cli/validation"
 	"dzcli/internal/economyconfig"
 
 	"github.com/spf13/cobra"
@@ -19,6 +20,9 @@ const (
 	StatusOK          = "ok"
 	StatusFailed      = "failed"
 	StatusNotModified = "not_modified"
+
+	jsonCompactWarningThreshold = 3
+	jsonCompactWarningItemLimit = 10
 )
 
 var ErrRendered = errors.New("structured output rendered")
@@ -45,6 +49,20 @@ type Diagnostic struct {
 	Kind        string        `json:"kind"`
 	TargetPath  string        `json:"target_path"`
 	Remediation []Remediation `json:"remediation"`
+	Group       *WarningGroup `json:"group,omitempty"`
+
+	groupKey   string
+	groupTitle string
+	itemLabel  string
+}
+
+// WarningGroup describes a compact validation warning group.
+type WarningGroup struct {
+	Key          string   `json:"key"`
+	Title        string   `json:"title"`
+	Count        int      `json:"count"`
+	Items        []string `json:"items"`
+	OmittedItems int      `json:"omitted_items,omitempty"`
 }
 
 type Remediation struct {
@@ -187,7 +205,13 @@ func TableRows(headers []string, rows [][]string) []map[string]any {
 }
 
 func WriteValidation(w io.Writer, targetPath string, files []ValidationFile) error {
+	return WriteValidationWithOptions(w, targetPath, files, validation.DefaultTextOptions())
+}
+
+// WriteValidationWithOptions writes validation output using the provided warning mode.
+func WriteValidationWithOptions(w io.Writer, targetPath string, files []ValidationFile, options validation.TextOptions) error {
 	files = normalizeValidationFiles(files)
+	files = applyValidationWarningMode(files, options.WarningMode)
 	envelope := Envelope{
 		Status:     StatusOK,
 		TargetPath: targetPath,
@@ -325,6 +349,14 @@ func DiagnosticForWarning(kind string, targetPath string, message string, remedi
 	}
 }
 
+func diagnosticForEconomyWarning(status economyconfig.FileStatus, warning economyconfig.WarningDetail, remediation []Remediation) Diagnostic {
+	diagnostic := DiagnosticForWarning(status.Kind, status.Path, warning.Message, remediation)
+	diagnostic.groupKey = warning.GroupKey
+	diagnostic.groupTitle = warning.GroupTitle
+	diagnostic.itemLabel = warning.ItemLabel
+	return diagnostic
+}
+
 func normalizeEnvelope(envelope Envelope) Envelope {
 	if envelope.Status == "" {
 		envelope.Status = StatusOK
@@ -358,6 +390,219 @@ func normalizeValidationFile(file ValidationFile) ValidationFile {
 	return file
 }
 
+func applyValidationWarningMode(files []ValidationFile, mode string) []ValidationFile {
+	if mode == "" {
+		mode = validation.WarningModeCompact
+	}
+	if mode == validation.WarningModeCompact {
+		files = compactValidationWarnings(files)
+	}
+	for index := range files {
+		files[index].Remediation = validationFileRemediation(files[index])
+	}
+	return files
+}
+
+type validationWarningGroup struct {
+	Key      string
+	Title    string
+	Warnings []validationGroupedWarning
+}
+
+type validationGroupedWarning struct {
+	Diagnostic Diagnostic
+}
+
+func compactValidationWarnings(files []ValidationFile) []ValidationFile {
+	groups := compactValidationWarningGroups(files)
+	if len(groups) == 0 {
+		return files
+	}
+	printedGroups := map[string]bool{}
+	for fileIndex := range files {
+		warnings := make([]Diagnostic, 0, len(files[fileIndex].Warnings))
+		for _, warning := range files[fileIndex].Warnings {
+			group, compacted := groups[warning.groupKey]
+			if !compacted {
+				warnings = append(warnings, warning)
+				continue
+			}
+			if printedGroups[warning.groupKey] {
+				continue
+			}
+			printedGroups[warning.groupKey] = true
+			warnings = append(warnings, diagnosticForWarningGroup(group))
+		}
+		files[fileIndex].Warnings = warnings
+	}
+	return files
+}
+
+func compactValidationWarningGroups(files []ValidationFile) map[string]validationWarningGroup {
+	groups := map[string]validationWarningGroup{}
+	for _, file := range files {
+		for _, warning := range file.Warnings {
+			if warning.groupKey == "" {
+				continue
+			}
+			group := groups[warning.groupKey]
+			group.Key = warning.groupKey
+			if group.Title == "" {
+				group.Title = warning.groupTitle
+			}
+			group.Warnings = append(group.Warnings, validationGroupedWarning{Diagnostic: warning})
+			groups[warning.groupKey] = group
+		}
+	}
+	for key, group := range groups {
+		if len(group.Warnings) < jsonCompactWarningThreshold {
+			delete(groups, key)
+		}
+	}
+	return groups
+}
+
+func diagnosticForWarningGroup(group validationWarningGroup) Diagnostic {
+	title := group.Title
+	if title == "" {
+		title = "similar warnings"
+	}
+	kind, targetPath := warningGroupScope(group)
+	items, omittedItems := warningGroupItems(group)
+	return Diagnostic{
+		Message:     fmt.Sprintf("%d %s", len(group.Warnings), title),
+		Kind:        kind,
+		TargetPath:  targetPath,
+		Remediation: warningGroupRemediation(group),
+		Group: &WarningGroup{
+			Key:          group.Key,
+			Title:        title,
+			Count:        len(group.Warnings),
+			Items:        items,
+			OmittedItems: omittedItems,
+		},
+	}
+}
+
+func warningGroupScope(group validationWarningGroup) (string, string) {
+	if len(group.Warnings) == 0 {
+		return "validation", ""
+	}
+	first := group.Warnings[0].Diagnostic
+	sameKind := true
+	samePath := true
+	for _, item := range group.Warnings[1:] {
+		if item.Diagnostic.Kind != first.Kind {
+			sameKind = false
+		}
+		if item.Diagnostic.TargetPath != first.TargetPath {
+			samePath = false
+		}
+	}
+	if sameKind && samePath {
+		return first.Kind, first.TargetPath
+	}
+	if sameKind {
+		return first.Kind, ""
+	}
+	return "validation", ""
+}
+
+func warningGroupItems(group validationWarningGroup) ([]string, int) {
+	labels := make([]string, 0, len(group.Warnings))
+	for _, item := range group.Warnings {
+		if item.Diagnostic.itemLabel == "" {
+			continue
+		}
+		labels = append(labels, item.Diagnostic.itemLabel)
+	}
+	if len(labels) <= jsonCompactWarningItemLimit {
+		return labels, 0
+	}
+	return labels[:jsonCompactWarningItemLimit], len(labels) - jsonCompactWarningItemLimit
+}
+
+func warningGroupRemediation(group validationWarningGroup) []Remediation {
+	remediation, shared := sharedWarningGroupRemediation(group)
+	if shared {
+		return remediation
+	}
+	return []Remediation{{Detail: "rerun with --warnings full for per-item remediation"}}
+}
+
+func sharedWarningGroupRemediation(group validationWarningGroup) ([]Remediation, bool) {
+	if len(group.Warnings) == 0 {
+		return []Remediation{}, true
+	}
+	first := group.Warnings[0].Diagnostic.Remediation
+	exact := true
+	equivalent := true
+	for _, item := range group.Warnings[1:] {
+		current := item.Diagnostic.Remediation
+		if !remediationSlicesEqual(first, current) {
+			exact = false
+		}
+		if !remediationSlicesEquivalent(first, current) {
+			equivalent = false
+		}
+	}
+	if exact {
+		return append([]Remediation{}, first...), true
+	}
+	if equivalent {
+		return remediationWithoutIDs(first), true
+	}
+	return nil, false
+}
+
+func remediationSlicesEqual(left []Remediation, right []Remediation) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func remediationSlicesEquivalent(left []Remediation, right []Remediation) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		leftItem := left[index]
+		rightItem := right[index]
+		leftItem.ID = ""
+		rightItem.ID = ""
+		if leftItem != rightItem {
+			return false
+		}
+	}
+	return true
+}
+
+func remediationWithoutIDs(remediation []Remediation) []Remediation {
+	result := make([]Remediation, 0, len(remediation))
+	for _, item := range remediation {
+		item.ID = ""
+		result = append(result, item)
+	}
+	return result
+}
+
+func validationFileRemediation(file ValidationFile) []Remediation {
+	remediation := []Remediation{}
+	for _, diagnostic := range file.Warnings {
+		remediation = append(remediation, diagnostic.Remediation...)
+	}
+	for _, diagnostic := range file.Failures {
+		remediation = append(remediation, diagnostic.Remediation...)
+	}
+	return normalizeRemediation(remediation)
+}
+
 func normalizeDiagnostics(diagnostics []Diagnostic) []Diagnostic {
 	if diagnostics == nil {
 		return []Diagnostic{}
@@ -383,7 +628,7 @@ func economyWarnings(status economyconfig.FileStatus) []Diagnostic {
 			if len(remediation) == 0 && warning.ManualOnly {
 				remediation = ManualRemediation()
 			}
-			diagnostics = append(diagnostics, DiagnosticForWarning(status.Kind, status.Path, warning.Message, remediation))
+			diagnostics = append(diagnostics, diagnosticForEconomyWarning(status, warning, remediation))
 		}
 		return diagnostics
 	}

@@ -45,7 +45,7 @@
 
 ## Large File Practices
 
-- Prefer `--output json` when parsing command results. JSON envelopes always include `status`, `target_path`, `warnings`, `failures`, `remediation`, and `data`.
+- Prefer `--output json` when parsing command results. JSON envelopes always include `status`, `target_path`, `warnings`, `failures`, `remediation`, and `data`. Validation JSON uses compact warning groups by default; add `--warnings full` when an agent needs every per-item remediation command.
 - Prefer `--cfgeconomycore` for economy type lookups when a mission uses multiple `types.xml` files.
 - Use `get` commands to locate a resource before updating it.
 - Use `--occurrence` when a file contains duplicate type or patrol names.
