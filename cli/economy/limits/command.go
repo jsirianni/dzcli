@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"dzcli/cli/output"
 	"dzcli/internal/economy"
 
 	"github.com/spf13/cobra"
@@ -34,7 +35,7 @@ func newCommand(baseAction economy.LimitAction, groupAction economy.UserGroupAct
 			if err != nil {
 				return err
 			}
-			return outputMutation(file, "limits", mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, file, "limits", mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -53,7 +54,7 @@ func newGroupCommand(groupAction economy.UserGroupAction, memberAction economy.U
 		Short: verb(groupAction) + " a user limits group",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runUserGroupMutation(file, dryRun, stdout, economy.UserLimitGroupOptions{
+			return runUserGroupMutation(cmd, file, dryRun, stdout, economy.UserLimitGroupOptions{
 				Kind:      args[0],
 				GroupName: args[1],
 				Members:   members,
@@ -78,7 +79,7 @@ func newMemberCommand(action economy.UserGroupAction, stdout io.Writer) *cobra.C
 		Short: verb(action) + " a user limits group member",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runUserGroupMutation(file, dryRun, stdout, economy.UserLimitGroupOptions{
+			return runUserGroupMutation(cmd, file, dryRun, stdout, economy.UserLimitGroupOptions{
 				Kind:      args[0],
 				GroupName: args[1],
 				Member:    args[2],
@@ -96,7 +97,7 @@ func addUserGroupFlags(command *cobra.Command, file *string, dryRun *bool) {
 	command.Flags().BoolVar(dryRun, "dry-run", false, "print modified XML without writing")
 }
 
-func runUserGroupMutation(file string, dryRun bool, stdout io.Writer, options economy.UserLimitGroupOptions) error {
+func runUserGroupMutation(cmd *cobra.Command, file string, dryRun bool, stdout io.Writer, options economy.UserLimitGroupOptions) error {
 	if file == "" {
 		return fmt.Errorf("--file is required")
 	}
@@ -104,7 +105,7 @@ func runUserGroupMutation(file string, dryRun bool, stdout io.Writer, options ec
 	if err != nil {
 		return err
 	}
-	return outputMutation(file, "limits", mutation, dryRun, stdout)
+	return outputMutationForCommand(cmd, file, "limits", mutation, dryRun, stdout)
 }
 
 func outputMutation(path string, kind string, mutation economy.FileMutation, dryRun bool, stdout io.Writer) error {
@@ -117,6 +118,13 @@ func outputMutation(path string, kind string, mutation economy.FileMutation, dry
 	}
 	fmt.Fprintf(stdout, "%s %s ok\n", kind, path)
 	return nil
+}
+
+func outputMutationForCommand(cmd *cobra.Command, path string, kind string, mutation economy.FileMutation, dryRun bool, stdout io.Writer) error {
+	if output.IsJSON(cmd) {
+		return output.WriteMutation(stdout, path, kind, mutation.Changed, dryRun, "application/xml", mutation.Data, nil)
+	}
+	return outputMutation(path, kind, mutation, dryRun, stdout)
 }
 
 func verb(action any) string {

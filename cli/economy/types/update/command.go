@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"dzcli/cli/output"
 	"dzcli/internal/economy"
 
 	"github.com/spf13/cobra"
@@ -50,6 +51,9 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 			mutation, err := economy.UpdateTypesFile(targetFile, options)
 			if err != nil {
 				return err
+			}
+			if output.IsJSON(cmd) {
+				return output.WriteMutation(stdout, targetFile, "types", mutation.Changed, dryRun, "application/xml", mutation.Data, nil)
 			}
 			if dryRun {
 				_, err := stdout.Write(mutation.Data)

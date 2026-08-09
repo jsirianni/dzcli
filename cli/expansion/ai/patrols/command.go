@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"dzcli/cli/output"
 	"dzcli/internal/expansion"
 
 	"github.com/spf13/cobra"
@@ -95,7 +96,7 @@ func NewCreateCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(targetFile, "patrols", mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, targetFile, "patrols", mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -133,7 +134,7 @@ func NewUpdateCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(targetFile, "patrols", mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, targetFile, "patrols", mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -166,7 +167,7 @@ func NewDeleteCommand(stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputMutation(targetFile, "patrols", mutation, dryRun, stdout)
+			return outputMutationForCommand(cmd, targetFile, "patrols", mutation, dryRun, stdout)
 		},
 	}
 	command.SetOut(stdout)
@@ -352,4 +353,11 @@ func outputMutation(path string, kind string, mutation expansion.FileMutation, d
 	}
 	fmt.Fprintf(stdout, "%s %s ok\n", kind, path)
 	return nil
+}
+
+func outputMutationForCommand(cmd *cobra.Command, path string, kind string, mutation expansion.FileMutation, dryRun bool, stdout io.Writer) error {
+	if output.IsJSON(cmd) {
+		return output.WriteMutation(stdout, path, kind, mutation.Changed, dryRun, "application/json", mutation.Data, nil)
+	}
+	return outputMutation(path, kind, mutation, dryRun, stdout)
 }

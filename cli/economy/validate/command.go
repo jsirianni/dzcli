@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"dzcli/cli/output"
 	"dzcli/cli/validation"
 	"dzcli/internal/economyconfig"
 
@@ -16,6 +17,9 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 		Short: "Validate central economy files",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if output.IsJSON(cmd) {
+				return validateEconomyJSON(args[0], stdout)
+			}
 			return ValidateEconomy(args[0], stdout)
 		},
 	}
@@ -87,4 +91,24 @@ func printWarnings(stdout io.Writer, status economyconfig.FileStatus) {
 		fmt.Fprintf(stdout, "%s %s warning: %s\n", status.Kind, status.Path, warning)
 		fmt.Fprintf(stdout, "%s %s remediation: validation-only; edit the XML manually\n", status.Kind, status.Path)
 	}
+}
+
+func validateEconomyJSON(path string, stdout io.Writer) error {
+	statuses, err := economyconfig.InspectEconomy(path)
+	if err != nil {
+		if writeErr := output.WriteFailure(stdout, fmt.Errorf("economy: failed: %w", err), "economy", path, nil); writeErr != nil {
+			return writeErr
+		}
+		return output.ErrRendered
+	}
+	files := output.EconomyValidationFiles(statuses)
+	if err := output.WriteValidation(stdout, path, files); err != nil {
+		return err
+	}
+	for _, status := range statuses {
+		if status.Err != nil {
+			return validation.ErrFailed
+		}
+	}
+	return nil
 }

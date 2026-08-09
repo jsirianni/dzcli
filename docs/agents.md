@@ -21,7 +21,7 @@
 3. Validate before making changes.
 
    ```sh
-   dzcli validate economy ./mpmissions/dayzOffline.chernarusplus
+   dzcli --output json validate economy ./mpmissions/dayzOffline.chernarusplus
    dzcli validate xml ./mpmissions/dayzOffline.chernarusplus
    ```
 
@@ -45,6 +45,7 @@
 
 ## Large File Practices
 
+- Prefer `--output json` when parsing command results. JSON envelopes always include `status`, `target_path`, `warnings`, `failures`, `remediation`, and `data`.
 - Prefer `--cfgeconomycore` for economy type lookups when a mission uses multiple `types.xml` files.
 - Use `get` commands to locate a resource before updating it.
 - Use `--occurrence` when a file contains duplicate type or patrol names.

@@ -58,6 +58,7 @@ dzcli validate server ./serverDZ.cfg
 
 - `--dry-run` prints the modified file and does not write.
 - Existing server fields prompt before overwrite unless `--force` or `--dry-run` is used.
+- With `--output json`, interactive overwrite prompts are disabled so stdout remains parseable; rerun with `--force`, `--dry-run`, or text output.
 - `--allow-unknown` is required before inserting a field that is not part of the built-in server config field list.
 
 ## Inspect cfggameplay.json
@@ -115,4 +116,3 @@ dzcli validate gameplay ./mpmissions/dayzOffline.chernarusplus/cfggameplay.json
 ## Field Names
 
 Use `get` before `update` when field spelling is uncertain. Gameplay fields use dotted paths such as `PlayerData.disablePersonalLight`. Server fields use server config names such as `hostname` or `motd`.
-

@@ -2,6 +2,8 @@
 
 Use validation commands before and after changes. Validation commands print `ok` on success and return a non-zero exit code on failure.
 
+Use `--output json` when validation output will be parsed by automation. The JSON envelope has top-level `warnings`, `failures`, and `remediation`; each inspected file is listed under `data.files` with its own `status`, `target_path`, diagnostics, and remediation.
+
 For exact command syntax, see [commands.md](commands.md).
 
 ## Central Economy

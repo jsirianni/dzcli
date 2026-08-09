@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -85,6 +86,160 @@ func TestRunVersionCommandPrintsInjectedVersion(t *testing.T) {
 	assertEqual(t, code, SuccessExitCode)
 	assertEqual(t, stdout.String(), "1.2.3\n")
 	assertEqual(t, stderr.String(), "")
+}
+
+func TestRunVersionCommandPrintsJSON(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"--output", "json", "version"}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	assertEqual(t, envelope["status"].(string), "ok")
+	assertEqual(t, jsonObject(t, envelope["data"])["version"].(string), "unknown")
+}
+
+func TestRunJSONValidationFailureWritesEnvelopeToStdout(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	dir := mixedXMLDir(t)
+
+	code := Run([]string{"--output", "json", "validate", "xml", dir}, &stdout, &stderr)
+
+	assertEqual(t, code, FailureExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	assertEqual(t, envelope["status"].(string), "failed")
+	assertEqual(t, len(jsonArray(t, envelope["failures"])), 1)
+	files := jsonArray(t, jsonObject(t, envelope["data"])["files"])
+	assertEqual(t, len(files), 2)
+}
+
+func TestRunJSONCommandErrorWritesFailureEnvelope(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"--output", "json", "get", "server"}, &stdout, &stderr)
+
+	assertEqual(t, code, FailureExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	assertEqual(t, envelope["status"].(string), "failed")
+	assertContains(t, jsonObject(t, jsonArray(t, envelope["failures"])[0])["message"].(string), "--file is required")
+}
+
+func TestRunInvalidOutputFormatUsesTextError(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"--output", "yaml", "version"}, &stdout, &stderr)
+
+	assertEqual(t, code, FailureExitCode)
+	assertEqual(t, stdout.String(), "")
+	assertContains(t, stderr.String(), "unsupported output format")
+}
+
+func TestRunJSONPromptBlockedIncludesRemediation(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	path := writeTempFile(t, `hostname = "Old";`)
+
+	code := Run([]string{"--output", "json", "update", "server", "hostname", "--file", path, "--value", "New"}, &stdout, &stderr)
+
+	assertEqual(t, code, FailureExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	assertEqual(t, envelope["status"].(string), "failed")
+	failure := jsonObject(t, jsonArray(t, envelope["failures"])[0])
+	assertContains(t, failure["message"].(string), "interactive confirmation")
+	assertEqual(t, len(jsonArray(t, failure["remediation"])), 3)
+}
+
+func TestRunJSONDryRunNestsContent(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	path := writeTempFile(t, `hostname = "Old";`)
+
+	code := Run([]string{"--output", "json", "update", "server", "hostname", "--file", path, "--value", "New", "--dry-run"}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	data := jsonObject(t, envelope["data"])
+	assertEqual(t, envelope["status"].(string), "ok")
+	assertEqual(t, data["dry_run"].(bool), true)
+	assertContains(t, data["content"].(string), "New")
+}
+
+func TestRunJSONEconomyValidationIncludesRemediation(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"--output", "json", "validate", "economy", fixturePath(t, "economyremediation")}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	assertEqual(t, envelope["status"].(string), "ok")
+	if len(jsonArray(t, envelope["warnings"])) == 0 {
+		t.Fatal("warnings = 0, want remediation warnings")
+	}
+	if len(jsonArray(t, envelope["remediation"])) == 0 {
+		t.Fatal("remediation = 0, want remediation actions")
+	}
+}
+
+func TestRunJSONGetRows(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"--output", "json", "get", "server", "--file", fixturePath(t, "serverconfig", "valid.cfg")}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	rows := jsonArray(t, jsonObject(t, envelope["data"])["rows"])
+	if len(rows) == 0 {
+		t.Fatal("rows = 0, want server config rows")
+	}
+}
+
+func TestRunJSONFixEconomyPlan(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"--output", "json", "fix", "economy", fixturePath(t, "economyremediation")}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	data := jsonObject(t, envelope["data"])
+	if len(jsonArray(t, data["plan"])) == 0 {
+		t.Fatal("plan = 0, want remediation plan items")
+	}
+	assertEqual(t, len(jsonArray(t, data["applied"])), 0)
+	assertEqual(t, len(jsonArray(t, data["written"])), 0)
+	if len(jsonArray(t, envelope["remediation"])) == 0 {
+		t.Fatal("remediation = 0, want fix remediation actions")
+	}
+}
+
+func TestRunJSONLoadoutDeleteDryRunPlan(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	loadout := fixturePath(t, "expansionai", "valid", "profiles", "ExpansionMod", "Loadouts", "TestLoadout.json")
+
+	code := Run([]string{"--output", "json", "delete", "expansion", "ai", "loadouts", "TestLoadout", "--file", loadout, "--dry-run"}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	data := jsonObject(t, envelope["data"])
+	assertEqual(t, envelope["target_path"].(string), loadout)
+	assertEqual(t, data["dry_run"].(bool), true)
+	assertEqual(t, data["deleted"].(bool), false)
 }
 
 func TestRunReportsEconomyCoreParseFailure(t *testing.T) {
@@ -278,8 +433,42 @@ func writeTestFile(t *testing.T, path string, content string) {
 	}
 }
 
+func writeTempFile(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "file.cfg")
+	writeTestFile(t, path, content)
+	return path
+}
+
 var osWriteFile = func(path string, data []byte) error {
 	return os.WriteFile(path, data, 0o600)
+}
+
+func decodeJSONEnvelope(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
+		t.Fatalf("json.Unmarshal(%q): %v", raw, err)
+	}
+	return envelope
+}
+
+func jsonObject(t *testing.T, value any) map[string]any {
+	t.Helper()
+	object, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("value = %#v, want JSON object", value)
+	}
+	return object
+}
+
+func jsonArray(t *testing.T, value any) []any {
+	t.Helper()
+	array, ok := value.([]any)
+	if !ok {
+		t.Fatalf("value = %#v, want JSON array", value)
+	}
+	return array
 }
 
 func assertContains(t *testing.T, haystack string, needle string) {

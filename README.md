@@ -29,6 +29,17 @@ Show the installed version:
 dzcli version
 ```
 
+## Structured Output
+
+Commands use the current human-readable text output by default. Add `-o json` or `--output json` when a script or agent needs one stable JSON envelope on stdout:
+
+```sh
+dzcli --output json validate economy ./mpmissions/dayzOffline.chernarusplus
+dzcli -o json get server --file ./serverDZ.cfg
+```
+
+Every JSON envelope includes `status`, `target_path`, `warnings`, `failures`, `remediation`, and `data`. Validation commands put per-file results in `data.files`; `get` commands put rows in `data.rows`; mutation dry-runs put generated content under `data.content` with `dry_run: true`.
+
 Use command help when building scripts or checking flags:
 
 ```sh

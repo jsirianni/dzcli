@@ -2,6 +2,8 @@
 
 The economy commands inspect and modify central economy XML files. Use [commands.md](commands.md) for the full flag reference.
 
+Add `--output json` to any economy command for a stable envelope. Listings return `data.rows`; validation returns `data.files`; mutation dry-runs include the generated XML in `data.content` instead of writing raw XML to stdout.
+
 ## Inspect Types
 
 List all type names in a `types.xml` file:

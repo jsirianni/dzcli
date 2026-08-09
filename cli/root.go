@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"dzcli/cli/output"
 	"dzcli/cli/validation"
 	"dzcli/cli/verbs"
 
@@ -33,7 +34,14 @@ func RunWithInput(args []string, stdin io.Reader, stdout io.Writer, stderr io.Wr
 	command.SetArgs(args)
 
 	if err := command.Execute(); err != nil {
-		if !errors.Is(err, validation.ErrFailed) {
+		if errors.Is(err, validation.ErrFailed) || errors.Is(err, output.ErrRendered) {
+			return FailureExitCode
+		}
+		if output.ShouldRenderJSONError(command, err) {
+			if writeErr := output.WriteFailure(stdout, err, "", "", nil); writeErr != nil {
+				fmt.Fprintln(stderr, writeErr)
+			}
+		} else {
 			fmt.Fprintln(stderr, err)
 		}
 		return FailureExitCode
@@ -46,18 +54,23 @@ func NewRootCommand(stdout io.Writer, stderr io.Writer) *cobra.Command {
 }
 
 func NewRootCommandWithInput(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+	var outputFormat string
 	root := &cobra.Command{
 		Use:               "dzcli",
 		Short:             "Tools for DayZ server configuration",
 		SilenceUsage:      true,
 		SilenceErrors:     true,
 		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return output.ValidateFormat(cmd)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()
 		},
 	}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
+	output.AddFormatFlag(root, &outputFormat)
 	root.AddCommand(verbs.NewGetCommand(stdout))
 	root.AddCommand(verbs.NewCreateCommand(stdout))
 	root.AddCommand(verbs.NewUpdateCommand(stdin, stdout))

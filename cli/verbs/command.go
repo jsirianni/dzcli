@@ -20,6 +20,7 @@ import (
 	"dzcli/cli/expansion/ai/loadouts"
 	"dzcli/cli/expansion/ai/patrols"
 	aivalidate "dzcli/cli/expansion/ai/validate"
+	"dzcli/cli/output"
 	serverconfigcmd "dzcli/cli/server/config"
 	servergameplaycmd "dzcli/cli/server/gameplay"
 	serverweathercmd "dzcli/cli/server/weather"
@@ -96,6 +97,9 @@ func NewValidateCommand(stdout io.Writer) *cobra.Command {
 			if len(args) == 1 {
 				path = args[0]
 			}
+			if output.IsJSON(cmd) {
+				return aivalidate.ValidateAIPathJSON(path, stdout)
+			}
 			return aivalidate.ValidateAIPath(path, stdout)
 		},
 	})
@@ -108,6 +112,9 @@ func NewValidateCommand(stdout io.Writer) *cobra.Command {
 			path := "."
 			if len(args) == 1 {
 				path = args[0]
+			}
+			if output.IsJSON(cmd) {
+				return xmlvalidate.ValidateXMLPathJSON(path, stdout)
 			}
 			return xmlvalidate.ValidateXMLPath(path, stdout)
 		},
@@ -139,6 +146,9 @@ func newGetEconomyTypesCommand(stdout io.Writer) *cobra.Command {
 			if len(args) == 1 {
 				filter = args[0]
 			}
+			if output.IsJSON(cmd) {
+				return listEconomyTypesAdvancedJSON(file, economyCore, filter, duplicates, compare, stdout)
+			}
 			return listEconomyTypesAdvanced(file, economyCore, filter, duplicates, compare, stdout)
 		},
 	}
@@ -160,6 +170,9 @@ func newGetEconomyLimitsCommand(stdout io.Writer) *cobra.Command {
 			if len(args) == 2 {
 				filter = args[1]
 			}
+			if output.IsJSON(cmd) {
+				return listEconomyLimitsJSON(file, args[0], filter, stdout)
+			}
 			return listEconomyLimits(file, args[0], filter, stdout)
 		},
 	}
@@ -178,6 +191,9 @@ func newGetEconomyLimitGroupsCommand(stdout io.Writer) *cobra.Command {
 			filter := ""
 			if len(args) == 2 {
 				filter = args[1]
+			}
+			if output.IsJSON(cmd) {
+				return listEconomyLimitGroupsJSON(file, args[0], filter, stdout)
 			}
 			return listEconomyLimitGroups(file, args[0], filter, stdout)
 		},
@@ -203,6 +219,9 @@ func newGetExpansionAIPatrolsCommand(stdout io.Writer) *cobra.Command {
 			if len(args) == 1 {
 				filter = args[0]
 			}
+			if output.IsJSON(cmd) {
+				return listExpansionAIPatrolsJSON(file, filter, stdout)
+			}
 			return listExpansionAIPatrols(file, filter, stdout)
 		},
 	}
@@ -221,6 +240,9 @@ func newGetExpansionAILoadoutsCommand(stdout io.Writer) *cobra.Command {
 			filter := ""
 			if len(args) == 1 {
 				filter = expansion.NormalizeLoadoutName(args[0])
+			}
+			if output.IsJSON(cmd) {
+				return listExpansionAILoadoutsJSON(file, path, filter, stdout)
 			}
 			return listExpansionAILoadouts(file, path, filter, stdout)
 		},
@@ -245,24 +267,9 @@ func listEconomyTypesAdvanced(file string, economyCore string, filter string, du
 	if compare && filter == "" {
 		return fmt.Errorf("--compare requires a type name")
 	}
-	files, err := economyTypeFiles(file, economyCore)
+	locations, counts, err := collectEconomyTypeLocations(file, economyCore)
 	if err != nil {
 		return err
-	}
-	var locations []economyTypeLocation
-	counts := map[string]int{}
-	fileCounts := map[string]int{}
-	for _, path := range files {
-		types, err := economyconfig.ParseTypesFile(path)
-		if err != nil {
-			return err
-		}
-		for _, entry := range types.Types {
-			counts[entry.Name]++
-			key := path + "\x00" + entry.Name
-			fileCounts[key]++
-			locations = append(locations, economyTypeLocation{Entry: entry, Path: filepath.Clean(path), Occurrence: fileCounts[key], Canonical: counts[entry.Name] == 1})
-		}
 	}
 	if compare {
 		return compareEconomyTypes(locations, filter, stdout)
@@ -293,7 +300,91 @@ func listEconomyTypesAdvanced(file string, economyCore string, filter string, du
 	return printMatchedRows(stdout, []string{"NAME", "FILE"}, rows, "type", filter)
 }
 
+func listEconomyTypesAdvancedJSON(file string, economyCore string, filter string, duplicates bool, compare bool, stdout io.Writer) error {
+	if compare && filter == "" {
+		return fmt.Errorf("--compare requires a type name")
+	}
+	locations, counts, err := collectEconomyTypeLocations(file, economyCore)
+	if err != nil {
+		return err
+	}
+	targetPath := economyTypesTargetPath(file, economyCore)
+	if compare {
+		headers, rows, err := compareEconomyTypeRows(locations, filter)
+		if err != nil {
+			return err
+		}
+		return output.WriteTableRows(stdout, targetPath, headers, rows)
+	}
+	var rows [][]string
+	for _, location := range locations {
+		if filter != "" && location.Entry.Name != filter {
+			continue
+		}
+		if duplicates && counts[location.Entry.Name] < 2 {
+			continue
+		}
+		status := "duplicate"
+		if location.Canonical {
+			status = "canonical"
+		}
+		if duplicates {
+			rows = append(rows, []string{location.Entry.Name, location.Path, strconv.Itoa(location.Occurrence), status})
+		} else {
+			rows = append(rows, []string{location.Entry.Name, displayFileName(location.Path)})
+		}
+	}
+	if duplicates {
+		sortRows(rows, 0, 1, 2)
+		if len(rows) == 0 {
+			return matchedRowsError("duplicate type", filter)
+		}
+		return output.WriteTableRows(stdout, targetPath, []string{"NAME", "FILE", "OCCURRENCE", "STATUS"}, rows)
+	}
+	sortRows(rows, 0, 1)
+	if len(rows) == 0 {
+		return matchedRowsError("type", filter)
+	}
+	return output.WriteTableRows(stdout, targetPath, []string{"NAME", "FILE"}, rows)
+}
+
+func collectEconomyTypeLocations(file string, economyCore string) ([]economyTypeLocation, map[string]int, error) {
+	files, err := economyTypeFiles(file, economyCore)
+	if err != nil {
+		return nil, nil, err
+	}
+	var locations []economyTypeLocation
+	counts := map[string]int{}
+	fileCounts := map[string]int{}
+	for _, path := range files {
+		types, err := economyconfig.ParseTypesFile(path)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, entry := range types.Types {
+			counts[entry.Name]++
+			key := path + "\x00" + entry.Name
+			fileCounts[key]++
+			locations = append(locations, economyTypeLocation{Entry: entry, Path: filepath.Clean(path), Occurrence: fileCounts[key], Canonical: counts[entry.Name] == 1})
+		}
+	}
+	return locations, counts, nil
+}
+
 func compareEconomyTypes(locations []economyTypeLocation, name string, stdout io.Writer) error {
+	headers, rows, err := compareEconomyTypeRows(locations, name)
+	if err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		fmt.Fprintf(stdout, "type %s duplicate definitions are identical\n", name)
+		return nil
+	}
+	printTable(stdout, headers, rows)
+	return nil
+}
+
+func compareEconomyTypeRows(locations []economyTypeLocation, name string) ([]string, [][]string, error) {
 	var matches []economyTypeLocation
 	for _, location := range locations {
 		if location.Entry.Name == name {
@@ -301,7 +392,7 @@ func compareEconomyTypes(locations []economyTypeLocation, name string, stdout io
 		}
 	}
 	if len(matches) < 2 {
-		return fmt.Errorf("type %q does not have duplicate definitions", name)
+		return nil, nil, fmt.Errorf("type %q does not have duplicate definitions", name)
 	}
 	canonical := economyconfig.NormalizedTypeFields(matches[0].Entry)
 	var rows [][]string
@@ -318,12 +409,7 @@ func compareEconomyTypes(locations []economyTypeLocation, name string, stdout io
 			rows = append(rows, []string{field, duplicate.Path, strconv.Itoa(duplicate.Occurrence), canonical[field], fields[field]})
 		}
 	}
-	if len(rows) == 0 {
-		fmt.Fprintf(stdout, "type %s duplicate definitions are identical\n", name)
-		return nil
-	}
-	printTable(stdout, []string{"FIELD", "FILE", "OCCURRENCE", "CANONICAL", "VALUE"}, rows)
-	return nil
+	return []string{"FIELD", "FILE", "OCCURRENCE", "CANONICAL", "VALUE"}, rows, nil
 }
 
 func economyTypeFiles(file string, economyCore string) ([]string, error) {
@@ -348,6 +434,13 @@ func economyTypeFiles(file string, economyCore string) ([]string, error) {
 	return files, nil
 }
 
+func economyTypesTargetPath(file string, economyCore string) string {
+	if file != "" {
+		return file
+	}
+	return economyCore
+}
+
 func listEconomyLimits(file string, kind string, filter string, stdout io.Writer) error {
 	if file == "" {
 		return fmt.Errorf("--file is required")
@@ -365,6 +458,26 @@ func listEconomyLimits(file string, kind string, filter string, stdout io.Writer
 	return printMatchedRows(stdout, []string{"NAME"}, rows, kind, filter)
 }
 
+func listEconomyLimitsJSON(file string, kind string, filter string, stdout io.Writer) error {
+	if file == "" {
+		return fmt.Errorf("--file is required")
+	}
+	names, err := economy.ListLimitNamesFile(file, kind)
+	if err != nil {
+		return err
+	}
+	var rows [][]string
+	for _, name := range names {
+		if filter == "" || name == filter {
+			rows = append(rows, []string{name})
+		}
+	}
+	if len(rows) == 0 {
+		return matchedRowsError(kind, filter)
+	}
+	return output.WriteTableRows(stdout, file, []string{"NAME"}, rows)
+}
+
 func listEconomyLimitGroups(file string, kind string, filter string, stdout io.Writer) error {
 	if file == "" {
 		return fmt.Errorf("--file is required")
@@ -380,6 +493,26 @@ func listEconomyLimitGroups(file string, kind string, filter string, stdout io.W
 		}
 	}
 	return printMatchedRows(stdout, []string{"NAME", "MEMBERS"}, rows, kind+" group", filter)
+}
+
+func listEconomyLimitGroupsJSON(file string, kind string, filter string, stdout io.Writer) error {
+	if file == "" {
+		return fmt.Errorf("--file is required")
+	}
+	groups, err := economy.ListUserLimitGroupsFile(file, kind)
+	if err != nil {
+		return err
+	}
+	var rows [][]string
+	for _, group := range groups {
+		if filter == "" || group.Name == filter {
+			rows = append(rows, []string{group.Name, strings.Join(group.Members, ",")})
+		}
+	}
+	if len(rows) == 0 {
+		return matchedRowsError(kind+" group", filter)
+	}
+	return output.WriteTableRows(stdout, file, []string{"NAME", "MEMBERS"}, rows)
 }
 
 func listExpansionAIPatrols(file string, filter string, stdout io.Writer) error {
@@ -409,6 +542,36 @@ func listExpansionAIPatrols(file string, filter string, stdout io.Writer) error 
 	return printMatchedRows(stdout, []string{"NAME", "INDEX", "LOADOUT", "FACTION", "BEHAVIOUR", "COORDINATES"}, rows, "patrol", filter)
 }
 
+func listExpansionAIPatrolsJSON(file string, filter string, stdout io.Writer) error {
+	targetFile, err := resolvePatrolsFile(file)
+	if err != nil {
+		return err
+	}
+	settings, err := expansion.ParseAIPatrolSettingsFile(targetFile)
+	if err != nil {
+		return err
+	}
+	var rows [][]string
+	for index, patrol := range settings.Patrols {
+		if filter != "" && patrol.Name != filter {
+			continue
+		}
+		rows = append(rows, []string{
+			patrol.Name,
+			strconv.Itoa(index + 1),
+			patrol.Loadout,
+			patrol.Faction,
+			patrol.Behaviour,
+			formatPatrolCoordinates(patrol),
+		})
+	}
+	sortRows(rows, 0, 1)
+	if len(rows) == 0 {
+		return matchedRowsError("patrol", filter)
+	}
+	return output.WriteTableRows(stdout, targetFile, []string{"NAME", "INDEX", "LOADOUT", "FACTION", "BEHAVIOUR", "COORDINATES"}, rows)
+}
+
 func listExpansionAILoadouts(file string, path string, filter string, stdout io.Writer) error {
 	files, err := loadoutFiles(file, path)
 	if err != nil {
@@ -428,6 +591,37 @@ func listExpansionAILoadouts(file string, path string, filter string, stdout io.
 	}
 	sortRows(rows, 0)
 	return printMatchedRows(stdout, []string{"NAME", "ITEMS"}, rows, "loadout", filter)
+}
+
+func listExpansionAILoadoutsJSON(file string, path string, filter string, stdout io.Writer) error {
+	files, err := loadoutFiles(file, path)
+	if err != nil {
+		return err
+	}
+	var rows [][]string
+	for _, loadoutFile := range files {
+		name := expansion.LoadoutName(loadoutFile)
+		if filter != "" && name != filter {
+			continue
+		}
+		loadout, err := expansion.ParseLoadoutFile(loadoutFile)
+		if err != nil {
+			return err
+		}
+		rows = append(rows, []string{name, strconv.Itoa(expansion.CountPrefabItems(loadout))})
+	}
+	sortRows(rows, 0)
+	if len(rows) == 0 {
+		return matchedRowsError("loadout", filter)
+	}
+	return output.WriteTableRows(stdout, loadoutsTargetPath(file, path), []string{"NAME", "ITEMS"}, rows)
+}
+
+func loadoutsTargetPath(file string, path string) string {
+	if file != "" {
+		return file
+	}
+	return path
 }
 
 func loadoutFiles(file string, path string) ([]string, error) {
@@ -496,15 +690,19 @@ func displayFileName(path string) string {
 
 func printMatchedRows(stdout io.Writer, headers []string, rows [][]string, resource string, filter string) error {
 	if len(rows) == 0 {
-		if filter != "" {
-			return fmt.Errorf("%s %q not found", resource, filter)
-		}
-		return fmt.Errorf("no %s resources found", resource)
+		return matchedRowsError(resource, filter)
 	}
 	headers, rows = dropEmptyNameColumn(headers, rows)
 	sortNamelessIndexRows(headers, rows)
 	printTable(stdout, headers, rows)
 	return nil
+}
+
+func matchedRowsError(resource string, filter string) error {
+	if filter != "" {
+		return fmt.Errorf("%s %q not found", resource, filter)
+	}
+	return fmt.Errorf("no %s resources found", resource)
 }
 
 func dropEmptyNameColumn(headers []string, rows [][]string) ([]string, [][]string) {

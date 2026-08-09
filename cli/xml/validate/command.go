@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"dzcli/cli/output"
 	"dzcli/cli/validation"
 
 	"github.com/spf13/cobra"
@@ -30,6 +31,9 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 			path := "."
 			if len(args) == 1 {
 				path = args[0]
+			}
+			if output.IsJSON(cmd) {
+				return ValidateXMLPathJSON(path, stdout)
 			}
 			return ValidateXMLPath(path, stdout)
 		},
@@ -126,4 +130,29 @@ func ParseGenericXMLFile(path string) error {
 		}
 		_ = token
 	}
+}
+
+func ValidateXMLPathJSON(path string, stdout io.Writer) error {
+	statuses, err := InspectXMLPath(path)
+	if err != nil {
+		if writeErr := output.WriteFailure(stdout, fmt.Errorf("xml: failed: %w", err), "xml", path, nil); writeErr != nil {
+			return writeErr
+		}
+		return output.ErrRendered
+	}
+	files := make([]output.ValidationFile, 0, len(statuses))
+	allOK := true
+	for _, status := range statuses {
+		if status.Err != nil {
+			allOK = false
+		}
+		files = append(files, output.SimpleValidationFile(status.Kind, status.Path, "", status.Err))
+	}
+	if err := output.WriteValidation(stdout, path, files); err != nil {
+		return err
+	}
+	if !allOK {
+		return validation.ErrFailed
+	}
+	return nil
 }
