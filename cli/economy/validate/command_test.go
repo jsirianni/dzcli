@@ -119,6 +119,23 @@ func TestValidateEconomyCompactsSimilarWarningsAtThreshold(t *testing.T) {
 	assertNotContains(t, output, `warning: fixed event "AmbientBear" has no matching cfgeventspawns.xml event`)
 }
 
+func TestValidateEconomyCompactWarningsTruncatesLargeFixedEventGroups(t *testing.T) {
+	root := economyRemediationRootWithEvents(t, fixedEventWarningSpamNames()...)
+	var stdout bytes.Buffer
+
+	if err := ValidateEconomy(root, &stdout); err != nil {
+		t.Fatalf("ValidateEconomy returned error: %v", err)
+	}
+
+	eventsPath := filepath.Join(root, "db", "events.xml")
+	output := stdout.String()
+	assertContains(t, output, `events `+eventsPath+` warning: 14 fixed events have no matching cfgeventspawns.xml event: "AmbientBear", "AnimalCow", "StaticTruck00", "StaticTruck01", "StaticTruck02", "StaticTruck03", "StaticTruck04", "StaticTruck05", "StaticTruck06", "StaticTruck07", +4 more`)
+	assertContains(t, output, "events "+eventsPath+" remediation: input required: provide --pos coordinates or --copy-zone-from a valid event")
+	assertNotContains(t, output, `warning: fixed event "`)
+	assertNotContains(t, output, `"StaticTruck08"`)
+	assertCount(t, output, "no matching cfgeventspawns.xml event", 1)
+}
+
 func TestValidateEconomyLeavesSmallWarningGroupsExpanded(t *testing.T) {
 	var stdout bytes.Buffer
 
@@ -145,6 +162,38 @@ func TestValidateEconomyFullWarningsPreservesExpandedOutput(t *testing.T) {
 	assertContains(t, output, `warning: fixed event "AnimalCow" has no matching cfgeventspawns.xml event`)
 	assertContains(t, output, `warning: fixed event "StaticTruck" has no matching cfgeventspawns.xml event`)
 	assertNotContains(t, output, "3 fixed events have no matching")
+}
+
+func TestValidateEconomyFullWarningsPreservesLargeFixedEventGroupsExpanded(t *testing.T) {
+	root := economyRemediationRootWithEvents(t, fixedEventWarningSpamNames()...)
+	var stdout bytes.Buffer
+
+	if err := ValidateEconomyWithOptions(root, &stdout, validation.TextOptions{WarningMode: validation.WarningModeFull}); err != nil {
+		t.Fatalf("ValidateEconomy returned error: %v", err)
+	}
+
+	output := stdout.String()
+	assertContains(t, output, `warning: fixed event "AmbientBear" has no matching cfgeventspawns.xml event`)
+	assertContains(t, output, `warning: fixed event "StaticTruck11" has no matching cfgeventspawns.xml event`)
+	assertNotContains(t, output, "14 fixed events have no matching")
+	assertCount(t, output, `warning: fixed event "`, 14)
+}
+
+func fixedEventWarningSpamNames() []string {
+	return []string{
+		"StaticTruck00",
+		"StaticTruck01",
+		"StaticTruck02",
+		"StaticTruck03",
+		"StaticTruck04",
+		"StaticTruck05",
+		"StaticTruck06",
+		"StaticTruck07",
+		"StaticTruck08",
+		"StaticTruck09",
+		"StaticTruck10",
+		"StaticTruck11",
+	}
 }
 
 func economyRemediationRootWithEvents(t *testing.T, names ...string) string {
@@ -193,6 +242,13 @@ func assertNotContains(t *testing.T, haystack string, needle string) {
 	t.Helper()
 	if strings.Contains(haystack, needle) {
 		t.Fatalf("%q contains %q", haystack, needle)
+	}
+}
+
+func assertCount(t *testing.T, haystack string, needle string, want int) {
+	t.Helper()
+	if got := strings.Count(haystack, needle); got != want {
+		t.Fatalf("%q occurs %d times, want %d in %q", needle, got, want, haystack)
 	}
 }
 
