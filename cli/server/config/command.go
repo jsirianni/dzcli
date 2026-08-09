@@ -124,12 +124,12 @@ func NewDeleteCommand(stdout io.Writer) *cobra.Command {
 }
 
 func ValidateConfig(path string, stdout io.Writer) error {
-	if err := serverconfig.ValidateFile(path); err != nil {
-		fmt.Fprintf(stdout, "server %s failed: %v\n", path, err)
-		return validation.ErrFailed
-	}
-	fmt.Fprintf(stdout, "server %s ok\n", path)
-	return nil
+	err := serverconfig.ValidateFile(path)
+	return validation.RenderTextStatuses(stdout, []validation.TextStatus{{
+		Kind: "server",
+		Path: path,
+		Err:  err,
+	}}, validation.DefaultTextOptions())
 }
 
 func validateConfigJSON(path string, stdout io.Writer) error {

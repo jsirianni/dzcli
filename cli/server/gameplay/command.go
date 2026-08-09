@@ -122,12 +122,12 @@ func NewDeleteCommand(stdout io.Writer) *cobra.Command {
 }
 
 func ValidateGameplay(path string, stdout io.Writer) error {
-	if err := gameplayconfig.ValidateFile(path); err != nil {
-		fmt.Fprintf(stdout, "gameplay %s failed: %v\n", path, err)
-		return validation.ErrFailed
-	}
-	fmt.Fprintf(stdout, "gameplay %s ok\n", path)
-	return nil
+	err := gameplayconfig.ValidateFile(path)
+	return validation.RenderTextStatuses(stdout, []validation.TextStatus{{
+		Kind: "gameplay",
+		Path: path,
+		Err:  err,
+	}}, validation.DefaultTextOptions())
 }
 
 func validateGameplayJSON(path string, stdout io.Writer) error {

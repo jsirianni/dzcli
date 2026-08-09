@@ -1741,6 +1741,12 @@ dzcli validate
 | `weather` | Validate cfgweather.xml |
 | `xml` | Validate XML files recursively |
 
+### Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
+
 ### Inherited Flags
 
 | Flag | Default | Description |
@@ -1761,6 +1767,7 @@ dzcli validate economy <mission-root|cfgeconomycore.xml|economy-file>
 
 | Flag | Default | Description |
 | --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate expansion
@@ -1783,6 +1790,7 @@ dzcli validate expansion
 
 | Flag | Default | Description |
 | --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate expansion ai
@@ -1799,6 +1807,7 @@ dzcli validate expansion ai [path]
 
 | Flag | Default | Description |
 | --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate gameplay
@@ -1815,6 +1824,7 @@ dzcli validate gameplay <cfggameplay.json>
 
 | Flag | Default | Description |
 | --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate init
@@ -1831,6 +1841,7 @@ dzcli validate init <init.c>
 
 | Flag | Default | Description |
 | --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate server
@@ -1847,6 +1858,7 @@ dzcli validate server <serverDZ.cfg>
 
 | Flag | Default | Description |
 | --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate weather
@@ -1863,6 +1875,7 @@ dzcli validate weather <cfgweather.xml>
 
 | Flag | Default | Description |
 | --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate xml
@@ -1879,6 +1892,7 @@ dzcli validate xml [path]
 
 | Flag | Default | Description |
 | --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
 
 ## dzcli version
