@@ -30,6 +30,9 @@ type WarningDetail struct {
 	Remediation []string
 	Actions     []RemediationAction
 	ManualOnly  bool
+	GroupKey    string
+	GroupTitle  string
+	ItemLabel   string
 }
 
 type RemediationClass string
@@ -229,11 +232,11 @@ func addEventSpawnWarnings(statuses []FileStatus, missionRoot string) {
 			continue
 		}
 		message := fmt.Sprintf("fixed event %q has no matching cfgeventspawns.xml event", event)
-		appendWarningDetail(statuses, "events", WarningDetail{Message: message, Actions: []RemediationAction{{
+		appendWarningDetail(statuses, "events", groupedWarningDetail(WarningDetail{Message: message, Actions: []RemediationAction{{
 			ID:     "event-spawn-create-" + event,
 			Detail: "input required: provide --pos coordinates or --copy-zone-from a valid event",
 			Class:  RemediationSemantic,
-		}}})
+		}}}, "economy.fixed-event-missing-spawn", "fixed events have no matching cfgeventspawns.xml event", event))
 	}
 }
 
@@ -250,7 +253,7 @@ func addRandomPresetWarnings(statuses []FileStatus, missionRoot string) {
 		if presets[ref] {
 			continue
 		}
-		appendWarningDetail(statuses, "cfgspawnabletypes", WarningDetail{Message: fmt.Sprintf("references random preset %q not defined in cfgrandompresets.xml", ref), ManualOnly: true})
+		appendWarningDetail(statuses, "cfgspawnabletypes", groupedWarningDetail(WarningDetail{Message: fmt.Sprintf("references random preset %q not defined in cfgrandompresets.xml", ref), ManualOnly: true}, "economy.missing-random-preset", "random presets are referenced but not defined in cfgrandompresets.xml", ref))
 	}
 }
 
@@ -266,13 +269,13 @@ func addEnvironmentWarnings(statuses []FileStatus, missionRoot string) {
 		fullPath := filepath.Join(missionRoot, filepath.FromSlash(path))
 		info, statErr := os.Stat(fullPath)
 		if (statErr != nil && errors.Is(statErr, os.ErrNotExist)) || (statErr == nil && !info.Mode().IsRegular()) {
-			appendWarningDetail(statuses, "cfgenvironment", WarningDetail{
+			appendWarningDetail(statuses, "cfgenvironment", groupedWarningDetail(WarningDetail{
 				Message: fmt.Sprintf("references missing territory file %q", path),
 				Actions: []RemediationAction{
 					{ID: fmt.Sprintf("environment-scaffold-%s-%d", path, pathOccurrences[path]), Command: fmt.Sprintf("dzcli update economy environment path %s --file %s --occurrence %d --set-path %s --scaffold", quotePowerShellArgument(path), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml")), pathOccurrences[path], quotePowerShellArgument(path)), Class: RemediationPlaceholder, AlternativeGroup: "missing-environment-" + path},
 					{ID: fmt.Sprintf("environment-delete-%s-%d", path, pathOccurrences[path]), Command: fmt.Sprintf("dzcli delete economy environment path %s --file %s --occurrence %d", quotePowerShellArgument(path), quotePowerShellArgument(filepath.Join(missionRoot, "cfgenvironment.xml")), pathOccurrences[path]), Class: RemediationDeletion, Destructive: true, AlternativeGroup: "missing-environment-" + path},
 				},
-			})
+			}, "economy.missing-territory-file", "territory files are referenced but missing", path))
 		}
 		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		usableFiles[base] = true
@@ -293,6 +296,7 @@ func addEnvironmentWarnings(statuses []FileStatus, missionRoot string) {
 		} else {
 			detail.ManualOnly = true
 		}
+		detail = groupedWarningDetail(detail, "economy.unregistered-usable-file", "usable files are referenced but not registered by path", usable)
 		appendWarningDetail(statuses, "cfgenvironment", detail)
 	}
 }
@@ -344,6 +348,13 @@ func addStatusWarning(status *FileStatus, message string, detail WarningDetail) 
 	status.WarningDetails = append(status.WarningDetails, detail)
 }
 
+func groupedWarningDetail(detail WarningDetail, key string, title string, item string) WarningDetail {
+	detail.GroupKey = key
+	detail.GroupTitle = title
+	detail.ItemLabel = item
+	return detail
+}
+
 func quotePowerShellArgument(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
@@ -356,7 +367,46 @@ func warningRemediation(kind string, path string, warning string) WarningDetail 
 	if len(detail.Remediation) == 0 {
 		detail.ManualOnly = true
 	}
+	if kind == "territory" && warning == "territory file contains no live spawn zones; scaffold is validation-only" {
+		detail = groupedWarningDetail(detail, "economy.territory-scaffold", "territory files contain no live spawn zones", path)
+	}
 	return detail
+}
+
+func typeWarningGroupDetail(detail WarningDetail, warning string, typeName string) WarningDetail {
+	if kind, ref, ok := typeLimitReferenceWarning(warning); ok {
+		item := typeName
+		if ref != "" {
+			item = typeName + " -> " + ref
+		}
+		return groupedWarningDetail(detail, "economy.type-reference."+kind, "types reference undefined "+kind+" values", item)
+	}
+	if strings.Contains(warning, "has min greater than nominal") {
+		return groupedWarningDetail(detail, "economy.type-min-greater-than-nominal", "types have min greater than nominal", typeName)
+	}
+	if strings.Contains(warning, "has quantmin greater than quantmax") {
+		return groupedWarningDetail(detail, "economy.type-quantmin-greater-than-quantmax", "types have quantmin greater than quantmax", typeName)
+	}
+	return detail
+}
+
+func typeLimitReferenceWarning(warning string) (string, string, bool) {
+	if !strings.HasSuffix(warning, " not defined in cfglimitsdefinition.xml") {
+		return "", "", false
+	}
+	for _, kind := range []string{"category", "tag", "usage", "value"} {
+		marker := " references " + kind + " "
+		index := strings.Index(warning, marker)
+		if index == -1 {
+			continue
+		}
+		reference := strings.TrimSuffix(warning[index+len(marker):], " not defined in cfglimitsdefinition.xml")
+		if value, err := strconv.Unquote(reference); err == nil {
+			reference = value
+		}
+		return kind, reference, true
+	}
+	return "", "", false
 }
 
 func sortedMapKeysString(values map[string]string) []string {
@@ -589,6 +639,7 @@ func InspectEconomyCore(path string) ([]FileStatus, error) {
 							}
 						}
 					}
+					detail = typeWarningGroupDetail(detail, warning, entry.Name)
 					addStatusWarning(&status, warning, detail)
 				}
 			}
@@ -1186,10 +1237,10 @@ func addTypeIdentityWarnings(statuses []FileStatus) {
 			if exists {
 				message := fmt.Sprintf("type %q duplicates a type already loaded from %s", entry.Name, previous.Path)
 				occurrence := fileOccurrences[status.Path+"\x00"+entry.Name]
-				detail := WarningDetail{Message: message, Actions: []RemediationAction{{
+				detail := groupedWarningDetail(WarningDetail{Message: message, Actions: []RemediationAction{{
 					ID: fmt.Sprintf("delete-duplicate-%s-%d", entry.Name, occurrence), Command: fmt.Sprintf("dzcli delete economy types %s --file %s --occurrence %d", quotePowerShellArgument(entry.Name), quotePowerShellArgument(status.Path), occurrence),
 					Class: RemediationDeletion, Destructive: true, AutoApply: true, Operation: RemediationDeleteType, File: status.Path, Name: entry.Name, Occurrence: occurrence,
-				}}}
+				}}}, "economy.duplicate-type", "duplicate type definitions are loaded after an earlier definition", entry.Name)
 				addStatusWarning(status, message, detail)
 				continue
 			}

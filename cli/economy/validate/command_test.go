@@ -2,6 +2,8 @@ package validate
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -101,6 +103,73 @@ func TestValidateEconomyPrintsActionableAndManualRemediation(t *testing.T) {
 	assertContains(t, output, "remediation: validation-only; edit the XML manually")
 }
 
+func TestValidateEconomyCompactsSimilarWarningsAtThreshold(t *testing.T) {
+	root := economyRemediationRootWithEvents(t, "StaticTruck")
+	var stdout bytes.Buffer
+
+	if err := ValidateEconomy(root, &stdout); err != nil {
+		t.Fatalf("ValidateEconomy returned error: %v", err)
+	}
+
+	eventsPath := filepath.Join(root, "db", "events.xml")
+	output := stdout.String()
+	assertContains(t, output, "events "+eventsPath+" ok")
+	assertContains(t, output, `events `+eventsPath+` warning: 3 fixed events have no matching cfgeventspawns.xml event: "AmbientBear", "AnimalCow", "StaticTruck"`)
+	assertContains(t, output, "events "+eventsPath+" remediation: input required: provide --pos coordinates or --copy-zone-from a valid event")
+	assertNotContains(t, output, `warning: fixed event "AmbientBear" has no matching cfgeventspawns.xml event`)
+}
+
+func TestValidateEconomyLeavesSmallWarningGroupsExpanded(t *testing.T) {
+	var stdout bytes.Buffer
+
+	if err := ValidateEconomy(fixturePath(t, "economyremediation"), &stdout); err != nil {
+		t.Fatalf("ValidateEconomy returned error: %v", err)
+	}
+
+	output := stdout.String()
+	assertContains(t, output, `warning: fixed event "AmbientBear" has no matching cfgeventspawns.xml event`)
+	assertContains(t, output, `warning: fixed event "AnimalCow" has no matching cfgeventspawns.xml event`)
+	assertNotContains(t, output, "2 fixed events have no matching")
+}
+
+func TestValidateEconomyFullWarningsPreservesExpandedOutput(t *testing.T) {
+	root := economyRemediationRootWithEvents(t, "StaticTruck")
+	var stdout bytes.Buffer
+
+	if err := ValidateEconomyWithOptions(root, &stdout, validation.TextOptions{WarningMode: validation.WarningModeFull}); err != nil {
+		t.Fatalf("ValidateEconomy returned error: %v", err)
+	}
+
+	output := stdout.String()
+	assertContains(t, output, `warning: fixed event "AmbientBear" has no matching cfgeventspawns.xml event`)
+	assertContains(t, output, `warning: fixed event "AnimalCow" has no matching cfgeventspawns.xml event`)
+	assertContains(t, output, `warning: fixed event "StaticTruck" has no matching cfgeventspawns.xml event`)
+	assertNotContains(t, output, "3 fixed events have no matching")
+}
+
+func economyRemediationRootWithEvents(t *testing.T, names ...string) string {
+	t.Helper()
+
+	root := t.TempDir()
+	if err := os.CopyFS(root, os.DirFS(fixturePath(t, "economyremediation"))); err != nil {
+		t.Fatalf("copy fixture: %v", err)
+	}
+	eventsPath := filepath.Join(root, "db", "events.xml")
+	data, err := os.ReadFile(eventsPath)
+	if err != nil {
+		t.Fatalf("read events fixture: %v", err)
+	}
+	var extra strings.Builder
+	for _, name := range names {
+		fmt.Fprintf(&extra, "  <event name=%q><position>fixed</position><active>1</active></event>\n", name)
+	}
+	updated := strings.Replace(string(data), "</events>", extra.String()+"</events>", 1)
+	if err := os.WriteFile(eventsPath, []byte(updated), 0o600); err != nil {
+		t.Fatalf("write events fixture: %v", err)
+	}
+	return root
+}
+
 func fixturePath(t *testing.T, parts ...string) string {
 	t.Helper()
 
@@ -117,6 +186,13 @@ func assertContains(t *testing.T, haystack string, needle string) {
 	t.Helper()
 	if !strings.Contains(haystack, needle) {
 		t.Fatalf("%q does not contain %q", haystack, needle)
+	}
+}
+
+func assertNotContains(t *testing.T, haystack string, needle string) {
+	t.Helper()
+	if strings.Contains(haystack, needle) {
+		t.Fatalf("%q contains %q", haystack, needle)
 	}
 }
 

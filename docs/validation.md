@@ -4,6 +4,8 @@ Use validation commands before and after changes. Validation commands print `ok`
 
 Use `--output json` when validation output will be parsed by automation. The JSON envelope has top-level `warnings`, `failures`, and `remediation`; each inspected file is listed under `data.files` with its own `status`, `target_path`, diagnostics, and remediation.
 
+Text output keeps `ok` and `failed` status lines one per file. Warning output defaults to `--warnings compact`, which groups explicitly similar warnings once three or more are found; `--warnings full` preserves one warning and remediation line per finding. JSON output is not compacted.
+
 For exact command syntax, see [commands.md](commands.md).
 
 ## Central Economy
@@ -28,7 +30,7 @@ dzcli validate economy ./mpmissions/dayzOffline.chernarusplus/db/types.xml
 
 Use this after changing `types.xml`, `cfgeconomycore.xml`, `cfglimitsdefinition.xml`, `cfglimitsdefinitionuser.xml`, or economy files referenced by `cfgeconomycore.xml`.
 
-Economy warnings remain non-fatal. Every warning is followed by either a scoped `dzcli` remediation command or `validation-only; edit the XML manually`. Parsing and schema errors remain fatal and return a non-zero exit code.
+Economy warnings remain non-fatal. Compact output groups repeated warning classes such as missing fixed event spawns, missing presets or territory files, duplicate type definitions, and repeated type relationship issues. Full warning output follows every finding with either a scoped `dzcli` remediation command or `validation-only; edit the XML manually`. Parsing and schema errors remain fatal and return a non-zero exit code.
 
 Generated remediation commands single-quote dynamic values and paths so mission folders containing spaces or PowerShell metacharacters can be copied safely.
 

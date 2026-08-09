@@ -20,76 +20,106 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 			if output.IsJSON(cmd) {
 				return validateEconomyJSON(args[0], stdout)
 			}
-			return ValidateEconomy(args[0], stdout)
+			return ValidateEconomyWithOptions(args[0], stdout, validation.TextOptionsFromCommand(cmd))
 		},
 	}
 }
 
 func ValidateEconomy(path string, stdout io.Writer) error {
+	return ValidateEconomyWithOptions(path, stdout, validation.DefaultTextOptions())
+}
+
+func ValidateEconomyWithOptions(path string, stdout io.Writer, options validation.TextOptions) error {
 	statuses, err := economyconfig.InspectEconomy(path)
 	if err != nil {
 		return fmt.Errorf("economy: failed: %w", err)
 	}
-	return printStatuses(statuses, stdout)
+	return printStatuses(statuses, stdout, options)
 }
 
 func ValidateEconomyCore(path string, stdout io.Writer) error {
+	return ValidateEconomyCoreWithOptions(path, stdout, validation.DefaultTextOptions())
+}
+
+func ValidateEconomyCoreWithOptions(path string, stdout io.Writer, options validation.TextOptions) error {
 	statuses, err := economyconfig.InspectEconomyCore(path)
 	if err != nil {
 		return fmt.Errorf("cfgeconomycore: failed: %w", err)
 	}
-	return printStatuses(statuses, stdout)
+	return printStatuses(statuses, stdout, options)
 }
 
-func printStatuses(statuses []economyconfig.FileStatus, stdout io.Writer) error {
-	allOK := true
+func printStatuses(statuses []economyconfig.FileStatus, stdout io.Writer, options validation.TextOptions) error {
+	return validation.RenderTextStatuses(stdout, economyTextStatuses(statuses), options)
+}
+
+func economyTextStatuses(statuses []economyconfig.FileStatus) []validation.TextStatus {
+	result := make([]validation.TextStatus, 0, len(statuses))
 	for _, status := range statuses {
-		if status.Err != nil {
-			allOK = false
-			fmt.Fprintf(stdout, "%s %s failed: %v\n", status.Kind, status.Path, status.Err)
-			printWarnings(stdout, status)
-			continue
-		}
+		summary := ""
 		if status.TypeCount > 0 || status.Kind == "base-types" || status.Kind == "types" {
-			fmt.Fprintf(stdout, "%s %s ok (%d types)\n", status.Kind, status.Path, status.TypeCount)
-		} else {
-			fmt.Fprintf(stdout, "%s %s ok\n", status.Kind, status.Path)
+			summary = fmt.Sprintf("%d types", status.TypeCount)
 		}
-		printWarnings(stdout, status)
+		result = append(result, validation.TextStatus{
+			Kind:     status.Kind,
+			Path:     status.Path,
+			Summary:  summary,
+			Err:      status.Err,
+			Warnings: economyTextWarnings(status),
+		})
 	}
-	if !allOK {
-		return validation.ErrFailed
+	return result
+}
+
+func economyTextWarnings(status economyconfig.FileStatus) []validation.TextWarning {
+	warnings := []validation.TextWarning{}
+	if len(status.WarningDetails) > 0 {
+		for _, warning := range status.WarningDetails {
+			warnings = append(warnings, validation.TextWarning{
+				Message:     warning.Message,
+				Remediation: economyWarningRemediation(warning),
+				GroupKey:    warning.GroupKey,
+				GroupTitle:  warning.GroupTitle,
+				ItemLabel:   warning.ItemLabel,
+			})
+		}
+		return warnings
 	}
-	return nil
+	for _, warning := range status.Warnings {
+		warnings = append(warnings, validation.TextWarning{
+			Message:     warning,
+			Remediation: []string{"validation-only; edit the XML manually"},
+		})
+	}
+	return warnings
+}
+
+func economyWarningRemediation(warning economyconfig.WarningDetail) []string {
+	remediation := []string{}
+	if len(warning.Actions) > 0 {
+		for _, action := range warning.Actions {
+			if action.Command != "" {
+				remediation = append(remediation, action.Command)
+			}
+			if action.Detail != "" {
+				remediation = append(remediation, action.Detail)
+			}
+		}
+	} else {
+		remediation = append(remediation, warning.Remediation...)
+	}
+	if warning.ManualOnly {
+		remediation = append(remediation, "validation-only; edit the XML manually")
+	}
+	return remediation
 }
 
 func printWarnings(stdout io.Writer, status economyconfig.FileStatus) {
-	if len(status.WarningDetails) > 0 {
-		for _, warning := range status.WarningDetails {
-			fmt.Fprintf(stdout, "%s %s warning: %s\n", status.Kind, status.Path, warning.Message)
-			if len(warning.Actions) > 0 {
-				for _, action := range warning.Actions {
-					if action.Command != "" {
-						fmt.Fprintf(stdout, "%s %s remediation: %s\n", status.Kind, status.Path, action.Command)
-					}
-					if action.Detail != "" {
-						fmt.Fprintf(stdout, "%s %s remediation: %s\n", status.Kind, status.Path, action.Detail)
-					}
-				}
-			} else {
-				for _, command := range warning.Remediation {
-					fmt.Fprintf(stdout, "%s %s remediation: %s\n", status.Kind, status.Path, command)
-				}
-			}
-			if warning.ManualOnly {
-				fmt.Fprintf(stdout, "%s %s remediation: validation-only; edit the XML manually\n", status.Kind, status.Path)
-			}
+	for _, warning := range economyTextWarnings(status) {
+		fmt.Fprintf(stdout, "%s %s warning: %s\n", status.Kind, status.Path, warning.Message)
+		for _, remediation := range warning.Remediation {
+			fmt.Fprintf(stdout, "%s %s remediation: %s\n", status.Kind, status.Path, remediation)
 		}
-		return
-	}
-	for _, warning := range status.Warnings {
-		fmt.Fprintf(stdout, "%s %s warning: %s\n", status.Kind, status.Path, warning)
-		fmt.Fprintf(stdout, "%s %s remediation: validation-only; edit the XML manually\n", status.Kind, status.Path)
 	}
 }
 

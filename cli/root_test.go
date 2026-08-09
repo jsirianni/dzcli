@@ -141,6 +141,17 @@ func TestRunInvalidOutputFormatUsesTextError(t *testing.T) {
 	assertContains(t, stderr.String(), "unsupported output format")
 }
 
+func TestRunInvalidWarningsModeUsesTextError(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"validate", "--warnings", "loud", "xml", fixturePath(t, "xml", "valid")}, &stdout, &stderr)
+
+	assertEqual(t, code, FailureExitCode)
+	assertEqual(t, stdout.String(), "")
+	assertContains(t, stderr.String(), "unsupported warning output")
+}
+
 func TestRunJSONPromptBlockedIncludesRemediation(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

@@ -1,7 +1,6 @@
 package validate
 
 import (
-	"fmt"
 	"io"
 
 	"dzcli/cli/output"
@@ -28,12 +27,12 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 }
 
 func ValidateInit(path string, stdout io.Writer) error {
-	if err := dayzinit.ValidateFile(path); err != nil {
-		fmt.Fprintf(stdout, "init %s failed: %v\n", path, err)
-		return validation.ErrFailed
-	}
-	fmt.Fprintf(stdout, "init %s ok\n", path)
-	return nil
+	err := dayzinit.ValidateFile(path)
+	return validation.RenderTextStatuses(stdout, []validation.TextStatus{{
+		Kind: "init",
+		Path: path,
+		Err:  err,
+	}}, validation.DefaultTextOptions())
 }
 
 func validateInitJSON(path string, stdout io.Writer) error {

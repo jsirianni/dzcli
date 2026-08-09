@@ -1,7 +1,6 @@
 package weather
 
 import (
-	"fmt"
 	"io"
 
 	"dzcli/cli/output"
@@ -28,12 +27,12 @@ func NewValidateCommand(stdout io.Writer) *cobra.Command {
 }
 
 func ValidateWeather(path string, stdout io.Writer) error {
-	if err := weatherconfig.ValidateFile(path); err != nil {
-		fmt.Fprintf(stdout, "weather %s failed: %v\n", path, err)
-		return validation.ErrFailed
-	}
-	fmt.Fprintf(stdout, "weather %s ok\n", path)
-	return nil
+	err := weatherconfig.ValidateFile(path)
+	return validation.RenderTextStatuses(stdout, []validation.TextStatus{{
+		Kind: "weather",
+		Path: path,
+		Err:  err,
+	}}, validation.DefaultTextOptions())
 }
 
 func validateWeatherJSON(path string, stdout io.Writer) error {

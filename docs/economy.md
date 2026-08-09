@@ -4,6 +4,8 @@ The economy commands inspect and modify central economy XML files. Use [commands
 
 Add `--output json` to any economy command for a stable envelope. Listings return `data.rows`; validation returns `data.files`; mutation dry-runs include the generated XML in `data.content` instead of writing raw XML to stdout.
 
+Validation text output uses compact warning groups by default once three or more similar warnings repeat. Use `dzcli validate --warnings full economy ...` to print every economy warning and remediation command individually.
+
 ## Inspect Types
 
 List all type names in a `types.xml` file:
@@ -286,7 +288,7 @@ After economy changes, validate the mission:
 dzcli validate economy ./mpmissions/dayzOffline.chernarusplus
 ```
 
-Each warning is followed by a concrete remediation command when dzcli can safely address it. Validation-only findings explicitly require manual XML editing. Missing event-spawn warnings exclude disabled fixed events and events backed by a matching, registered, existing environment territory file.
+Compact validation output groups repeated economy warning classes, including missing fixed event spawns, missing presets or territory files, duplicate type definitions, undefined type limit references, and repeated scalar relationship issues. In full warning output, each warning is followed by a concrete remediation command when dzcli can safely address it; validation-only findings explicitly require manual XML editing. Missing event-spawn warnings exclude disabled fixed events and events backed by a matching, registered, existing environment territory file.
 
 Preview all supported findings as an ordered plan:
 

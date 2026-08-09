@@ -24,35 +24,21 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 			if output.IsJSON(cmd) {
 				return ValidateAIPathJSON(path, stdout)
 			}
-			return ValidateAIPath(path, stdout)
+			return ValidateAIPathWithOptions(path, stdout, validation.TextOptionsFromCommand(cmd))
 		},
 	}
 }
 
 func ValidateAIPath(path string, stdout io.Writer) error {
+	return ValidateAIPathWithOptions(path, stdout, validation.DefaultTextOptions())
+}
+
+func ValidateAIPathWithOptions(path string, stdout io.Writer, options validation.TextOptions) error {
 	statuses, err := expansion.InspectAIPath(path)
 	if err != nil {
 		return fmt.Errorf("expansion ai: failed: %w", err)
 	}
-
-	allOK := true
-	for _, status := range statuses {
-		if status.Err != nil {
-			allOK = false
-			fmt.Fprintf(stdout, "%s %s failed: %v\n", status.Kind, status.Path, status.Err)
-			continue
-		}
-		if status.Summary == "" {
-			fmt.Fprintf(stdout, "%s %s ok\n", status.Kind, status.Path)
-			continue
-		}
-		fmt.Fprintf(stdout, "%s %s ok (%s)\n", status.Kind, status.Path, status.Summary)
-	}
-
-	if !allOK {
-		return validation.ErrFailed
-	}
-	return nil
+	return validation.RenderTextStatuses(stdout, aiTextStatuses(statuses), options)
 }
 
 func ValidateAIPathJSON(path string, stdout io.Writer) error {
@@ -80,4 +66,17 @@ func ValidateAIPathJSON(path string, stdout io.Writer) error {
 		return validation.ErrFailed
 	}
 	return nil
+}
+
+func aiTextStatuses(statuses []expansion.AIFileStatus) []validation.TextStatus {
+	result := make([]validation.TextStatus, 0, len(statuses))
+	for _, status := range statuses {
+		result = append(result, validation.TextStatus{
+			Kind:    status.Kind,
+			Path:    status.Path,
+			Summary: status.Summary,
+			Err:     status.Err,
+		})
+	}
+	return result
 }

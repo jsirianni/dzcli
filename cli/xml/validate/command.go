@@ -35,31 +35,21 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 			if output.IsJSON(cmd) {
 				return ValidateXMLPathJSON(path, stdout)
 			}
-			return ValidateXMLPath(path, stdout)
+			return ValidateXMLPathWithOptions(path, stdout, validation.TextOptionsFromCommand(cmd))
 		},
 	}
 }
 
 func ValidateXMLPath(path string, stdout io.Writer) error {
+	return ValidateXMLPathWithOptions(path, stdout, validation.DefaultTextOptions())
+}
+
+func ValidateXMLPathWithOptions(path string, stdout io.Writer, options validation.TextOptions) error {
 	statuses, err := InspectXMLPath(path)
 	if err != nil {
 		return fmt.Errorf("xml: failed: %w", err)
 	}
-
-	allOK := true
-	for _, status := range statuses {
-		if status.Err != nil {
-			allOK = false
-			fmt.Fprintf(stdout, "%s %s failed: %v\n", status.Kind, status.Path, status.Err)
-			continue
-		}
-		fmt.Fprintf(stdout, "%s %s ok\n", status.Kind, status.Path)
-	}
-
-	if !allOK {
-		return validation.ErrFailed
-	}
-	return nil
+	return validation.RenderTextStatuses(stdout, xmlTextStatuses(statuses), options)
 }
 
 func InspectXMLPath(path string) ([]FileStatus, error) {
@@ -155,4 +145,16 @@ func ValidateXMLPathJSON(path string, stdout io.Writer) error {
 		return validation.ErrFailed
 	}
 	return nil
+}
+
+func xmlTextStatuses(statuses []FileStatus) []validation.TextStatus {
+	result := make([]validation.TextStatus, 0, len(statuses))
+	for _, status := range statuses {
+		result = append(result, validation.TextStatus{
+			Kind: status.Kind,
+			Path: status.Path,
+			Err:  status.Err,
+		})
+	}
+	return result
 }

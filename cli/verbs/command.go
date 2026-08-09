@@ -24,6 +24,7 @@ import (
 	serverconfigcmd "dzcli/cli/server/config"
 	servergameplaycmd "dzcli/cli/server/gameplay"
 	serverweathercmd "dzcli/cli/server/weather"
+	"dzcli/cli/validation"
 	xmlvalidate "dzcli/cli/xml/validate"
 	"dzcli/internal/economy"
 	"dzcli/internal/economyconfig"
@@ -80,8 +81,16 @@ func NewFixCommand(stdout io.Writer) *cobra.Command {
 }
 
 func NewValidateCommand(stdout io.Writer) *cobra.Command {
+	var warningMode string
 	command := newParent("validate", "Validate DayZ configuration files")
 	command.SetOut(stdout)
+	validation.AddWarningModeFlag(command, &warningMode)
+	command.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if err := output.ValidateFormat(cmd); err != nil {
+			return err
+		}
+		return validation.ValidateWarningMode(cmd)
+	}
 	command.AddCommand(initvalidate.NewCommand(stdout))
 	command.AddCommand(serverconfigcmd.NewValidateCommand(stdout))
 	command.AddCommand(servergameplaycmd.NewValidateCommand(stdout))
@@ -100,7 +109,7 @@ func NewValidateCommand(stdout io.Writer) *cobra.Command {
 			if output.IsJSON(cmd) {
 				return aivalidate.ValidateAIPathJSON(path, stdout)
 			}
-			return aivalidate.ValidateAIPath(path, stdout)
+			return aivalidate.ValidateAIPathWithOptions(path, stdout, validation.TextOptionsFromCommand(cmd))
 		},
 	})
 	command.AddCommand(expansionCommand)
@@ -116,7 +125,7 @@ func NewValidateCommand(stdout io.Writer) *cobra.Command {
 			if output.IsJSON(cmd) {
 				return xmlvalidate.ValidateXMLPathJSON(path, stdout)
 			}
-			return xmlvalidate.ValidateXMLPath(path, stdout)
+			return xmlvalidate.ValidateXMLPathWithOptions(path, stdout, validation.TextOptionsFromCommand(cmd))
 		},
 	})
 	return command
