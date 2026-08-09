@@ -115,7 +115,7 @@ func NewValidateCommand(stdout io.Writer) *cobra.Command {
 	command.AddCommand(expansionCommand)
 	command.AddCommand(&cobra.Command{
 		Use:   "xml [path]",
-		Short: "Validate XML files recursively",
+		Short: "Validate XML files or directories recursively",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := "."

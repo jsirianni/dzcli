@@ -68,6 +68,13 @@ Validate a mission economy folder:
 dzcli validate economy ./mpmissions/dayzOffline.chernarusplus
 ```
 
+Validate one XML file, or validate XML files recursively under a directory:
+
+```sh
+dzcli validate xml ./mpmissions/dayzOffline.chernarusplus/db/types.xml
+dzcli validate xml ./mpmissions/dayzOffline.chernarusplus
+```
+
 Preview an economy type update without writing the file:
 
 ```sh
