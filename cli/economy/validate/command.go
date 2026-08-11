@@ -18,7 +18,7 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if output.IsJSON(cmd) {
-				return validateEconomyJSON(args[0], stdout)
+				return validateEconomyJSON(args[0], stdout, validation.TextOptionsFromCommand(cmd))
 			}
 			return ValidateEconomyWithOptions(args[0], stdout, validation.TextOptionsFromCommand(cmd))
 		},
@@ -123,7 +123,7 @@ func printWarnings(stdout io.Writer, status economyconfig.FileStatus) {
 	}
 }
 
-func validateEconomyJSON(path string, stdout io.Writer) error {
+func validateEconomyJSON(path string, stdout io.Writer, options validation.TextOptions) error {
 	statuses, err := economyconfig.InspectEconomy(path)
 	if err != nil {
 		if writeErr := output.WriteFailure(stdout, fmt.Errorf("economy: failed: %w", err), "economy", path, nil); writeErr != nil {
@@ -132,7 +132,7 @@ func validateEconomyJSON(path string, stdout io.Writer) error {
 		return output.ErrRendered
 	}
 	files := output.EconomyValidationFiles(statuses)
-	if err := output.WriteValidation(stdout, path, files); err != nil {
+	if err := output.WriteValidationWithOptions(stdout, path, files, options); err != nil {
 		return err
 	}
 	for _, status := range statuses {

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -238,6 +239,65 @@ func TestRunJSONEconomyValidationIncludesRemediation(t *testing.T) {
 	if len(jsonArray(t, envelope["remediation"])) == 0 {
 		t.Fatal("remediation = 0, want remediation actions")
 	}
+}
+
+func TestRunJSONEconomyValidationCompactsWarningsByDefault(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	extraEvents := []string{
+		"StaticTruck00",
+		"StaticTruck01",
+		"StaticTruck02",
+		"StaticTruck03",
+		"StaticTruck04",
+		"StaticTruck05",
+		"StaticTruck06",
+		"StaticTruck07",
+		"StaticTruck08",
+		"StaticTruck09",
+		"StaticTruck10",
+	}
+	root := economyRemediationRootWithEvents(t, extraEvents...)
+
+	code := Run([]string{"--output", "json", "validate", "economy", root}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	warning := findWarningGroup(t, jsonArray(t, envelope["warnings"]), "economy.fixed-event-missing-spawn")
+	assertEqual(t, warning["message"].(string), "13 fixed events have no matching cfgeventspawns.xml event")
+	group := jsonObject(t, warning["group"])
+	assertEqual(t, int(group["count"].(float64)), 13)
+	assertEqual(t, len(jsonArray(t, group["items"])), 10)
+	assertEqual(t, int(group["omitted_items"].(float64)), 3)
+	remediation := jsonObject(t, jsonArray(t, warning["remediation"])[0])
+	assertContains(t, remediation["detail"].(string), "input required")
+	assertNotContains(t, stdout.String(), "event-spawn-create-AmbientBear")
+	assertNotContains(t, stdout.String(), `fixed event \"AmbientBear\"`)
+}
+
+func TestRunJSONEconomyValidationFullWarningsPreservesExpandedOutput(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	root := economyRemediationRootWithEvents(t, "StaticTruck")
+
+	code := Run([]string{"--output", "json", "validate", "--warnings", "full", "economy", root}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	warnings := jsonArray(t, envelope["warnings"])
+	assertHasWarningMessage(t, warnings, `fixed event "AmbientBear" has no matching cfgeventspawns.xml event`)
+	assertHasWarningMessage(t, warnings, `fixed event "AnimalCow" has no matching cfgeventspawns.xml event`)
+	assertHasWarningMessage(t, warnings, `fixed event "StaticTruck" has no matching cfgeventspawns.xml event`)
+	for _, item := range warnings {
+		warning := jsonObject(t, item)
+		if _, exists := warning["group"]; exists {
+			t.Fatalf("warning group = %#v, want no compact group in full mode", warning["group"])
+		}
+	}
+	assertContains(t, stdout.String(), "event-spawn-create-AmbientBear")
+	assertContains(t, stdout.String(), "event-spawn-create-StaticTruck")
 }
 
 func TestRunJSONGetRows(t *testing.T) {
@@ -529,6 +589,29 @@ func partialEconomyDir(t *testing.T) string {
 	return dir
 }
 
+func economyRemediationRootWithEvents(t *testing.T, names ...string) string {
+	t.Helper()
+
+	root := t.TempDir()
+	if err := os.CopyFS(root, os.DirFS(fixturePath(t, "economyremediation"))); err != nil {
+		t.Fatalf("copy fixture: %v", err)
+	}
+	eventsPath := filepath.Join(root, "db", "events.xml")
+	data, err := os.ReadFile(eventsPath)
+	if err != nil {
+		t.Fatalf("read events fixture: %v", err)
+	}
+	var extra strings.Builder
+	for _, name := range names {
+		fmt.Fprintf(&extra, "  <event name=%q><position>fixed</position><active>1</active></event>\n", name)
+	}
+	updated := strings.Replace(string(data), "</events>", extra.String()+"</events>", 1)
+	if err := os.WriteFile(eventsPath, []byte(updated), 0o600); err != nil {
+		t.Fatalf("write events fixture: %v", err)
+	}
+	return root
+}
+
 func writeTestFile(t *testing.T, path string, content string) {
 	t.Helper()
 
@@ -573,6 +656,34 @@ func jsonArray(t *testing.T, value any) []any {
 		t.Fatalf("value = %#v, want JSON array", value)
 	}
 	return array
+}
+
+func findWarningGroup(t *testing.T, warnings []any, key string) map[string]any {
+	t.Helper()
+	for _, item := range warnings {
+		warning := jsonObject(t, item)
+		groupValue, exists := warning["group"]
+		if !exists {
+			continue
+		}
+		group := jsonObject(t, groupValue)
+		if group["key"] == key {
+			return warning
+		}
+	}
+	t.Fatalf("group %q not found in warnings %#v", key, warnings)
+	return nil
+}
+
+func assertHasWarningMessage(t *testing.T, warnings []any, message string) {
+	t.Helper()
+	for _, item := range warnings {
+		warning := jsonObject(t, item)
+		if warning["message"] == message {
+			return
+		}
+	}
+	t.Fatalf("warning message %q not found in %#v", message, warnings)
 }
 
 func assertContains(t *testing.T, haystack string, needle string) {

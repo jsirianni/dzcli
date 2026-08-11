@@ -4,7 +4,7 @@ The economy commands inspect and modify central economy XML files. Use [commands
 
 Add `--output json` to any economy command for a stable envelope. Listings return `data.rows`; validation returns `data.files`; mutation dry-runs include the generated XML in `data.content` instead of writing raw XML to stdout.
 
-Validation text output uses compact warning groups by default once three or more similar warnings repeat. Use `dzcli validate --warnings full economy ...` to print every economy warning and remediation command individually.
+Validation output uses compact warning groups by default once three or more similar warnings repeat. Compact JSON emits grouped warning diagnostics with counts and limited example items. Use `dzcli validate --warnings full economy ...` to print or emit every economy warning and remediation command individually.
 
 ## Inspect Types
 

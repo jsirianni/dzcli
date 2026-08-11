@@ -4,7 +4,7 @@ Use validation commands before and after changes. Validation commands print `ok`
 
 Use `--output json` when validation output will be parsed by automation. The JSON envelope has top-level `warnings`, `failures`, and `remediation`; each inspected file is listed under `data.files` with its own `status`, `target_path`, diagnostics, and remediation.
 
-Text output keeps `ok` and `failed` status lines one per file. Warning output defaults to `--warnings compact`, which groups explicitly similar warnings once three or more are found; `--warnings full` preserves one warning and remediation line per finding. JSON output is not compacted.
+Text output keeps `ok` and `failed` status lines one per file. Warning output defaults to `--warnings compact`, which groups explicitly similar warnings once three or more are found. Compact JSON emits one diagnostic for each grouped warning with a `group` object containing `key`, `title`, `count`, example `items`, and optional `omitted_items`; shared remediation is included when available, otherwise the group says to rerun with `--warnings full` for per-item remediation. `--warnings full` preserves one warning and remediation entry per finding.
 
 For exact command syntax, see [commands.md](commands.md).
 
