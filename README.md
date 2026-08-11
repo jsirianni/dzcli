@@ -42,6 +42,15 @@ Every JSON envelope includes `status`, `target_path`, `warnings`, `failures`, `r
 
 Validation output compacts repeated similar warnings once a group reaches three items. Compact JSON warnings include a `group` object with `key`, `title`, `count`, example `items`, and `omitted_items` when more examples are hidden. Use `--warnings full` with any `validate` command to print or emit every warning and remediation item individually.
 
+Validate a repository or servers root in one consolidated pass:
+
+```sh
+dzcli validate all ./servers
+dzcli --output json validate all ./servers
+```
+
+Repository-wide validation discovers server roots, `serverDZ.cfg`, mission gameplay/weather/init files, central economy folders with `cfgeconomycore.xml`, Expansion AI config roots, and XML trees. Mission folders without `cfgeconomycore.xml` skip economy validation so partial economy folders do not fail solely for missing economy core, while XML files under those folders are still checked for well-formedness.
+
 Use command help when building scripts or checking flags:
 
 ```sh

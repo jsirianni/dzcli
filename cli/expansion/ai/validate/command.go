@@ -68,6 +68,11 @@ func ValidateAIPathJSON(path string, stdout io.Writer) error {
 	return nil
 }
 
+// TextStatuses converts Expansion AI validation statuses to shared text-rendering statuses.
+func TextStatuses(statuses []expansion.AIFileStatus) []validation.TextStatus {
+	return aiTextStatuses(statuses)
+}
+
 func aiTextStatuses(statuses []expansion.AIFileStatus) []validation.TextStatus {
 	result := make([]validation.TextStatus, 0, len(statuses))
 	for _, status := range statuses {

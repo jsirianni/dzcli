@@ -1733,6 +1733,7 @@ dzcli validate
 
 | Command | Description |
 | --- | --- |
+| `all` | Validate a repository or servers root |
 | `economy` | Validate central economy files |
 | `expansion` | Validate DayZ Expansion mod configuration |
 | `gameplay` | Validate cfggameplay.json |
@@ -1751,6 +1752,33 @@ dzcli validate
 
 | Flag | Default | Description |
 | --- | --- | --- |
+| `-o, --output` | `text` | output format: text or json |
+
+## dzcli validate all
+
+Validate a repository or servers root
+
+Validate all DayZ server configuration discovered under a repository or servers root. The command discovers server roots, mission roots, serverDZ.cfg, mission gameplay/weather/init files, central economy folders with cfgeconomycore.xml, Expansion AI roots, and XML trees. Mission folders without cfgeconomycore.xml skip economy validation while still participating in XML validation.
+
+### Usage
+
+```text
+dzcli validate all <repo-or-servers-root>
+```
+
+### Examples
+
+```text
+dzcli validate all ./servers
+dzcli validate repo ./dayz-configs
+dzcli --output json validate all ./servers
+```
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
 
 ## dzcli validate economy

@@ -21,6 +21,7 @@ import (
 	"dzcli/cli/expansion/ai/patrols"
 	aivalidate "dzcli/cli/expansion/ai/validate"
 	"dzcli/cli/output"
+	repovalidate "dzcli/cli/repository/validate"
 	serverconfigcmd "dzcli/cli/server/config"
 	servergameplaycmd "dzcli/cli/server/gameplay"
 	serverweathercmd "dzcli/cli/server/weather"
@@ -92,6 +93,7 @@ func NewValidateCommand(stdout io.Writer) *cobra.Command {
 		return validation.ValidateWarningMode(cmd)
 	}
 	command.AddCommand(initvalidate.NewCommand(stdout))
+	command.AddCommand(repovalidate.NewCommand(stdout))
 	command.AddCommand(serverconfigcmd.NewValidateCommand(stdout))
 	command.AddCommand(servergameplaycmd.NewValidateCommand(stdout))
 	command.AddCommand(serverweathercmd.NewValidateCommand(stdout))

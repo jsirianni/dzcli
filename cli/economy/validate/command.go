@@ -53,6 +53,11 @@ func printStatuses(statuses []economyconfig.FileStatus, stdout io.Writer, option
 	return validation.RenderTextStatuses(stdout, economyTextStatuses(statuses), options)
 }
 
+// TextStatuses converts economy validation statuses to shared text-rendering statuses.
+func TextStatuses(statuses []economyconfig.FileStatus) []validation.TextStatus {
+	return economyTextStatuses(statuses)
+}
+
 func economyTextStatuses(statuses []economyconfig.FileStatus) []validation.TextStatus {
 	result := make([]validation.TextStatus, 0, len(statuses))
 	for _, status := range statuses {
