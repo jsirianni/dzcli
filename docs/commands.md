@@ -1136,7 +1136,7 @@ dzcli get expansion
 
 | Command | Description |
 | --- | --- |
-| `ai` | Modify DayZ Expansion AI resources |
+| `ai` | List DayZ Expansion AI resources |
 
 ### Inherited Flags
 
@@ -1146,7 +1146,7 @@ dzcli get expansion
 
 ## dzcli get expansion ai
 
-Modify DayZ Expansion AI resources
+List DayZ Expansion AI resources
 
 ### Usage
 

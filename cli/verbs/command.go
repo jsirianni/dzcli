@@ -213,7 +213,7 @@ func newGetEconomyLimitGroupsCommand(stdout io.Writer) *cobra.Command {
 
 func newGetExpansionCommand(stdout io.Writer) *cobra.Command {
 	command := newParent("expansion", "List DayZ Expansion mod resources")
-	command.AddCommand(newAIParent(stdout, newGetExpansionAIPatrolsCommand(stdout), newGetExpansionAILoadoutsCommand(stdout)))
+	command.AddCommand(newGetAIParent(stdout, newGetExpansionAIPatrolsCommand(stdout), newGetExpansionAILoadoutsCommand(stdout)))
 	return command
 }
 
@@ -801,6 +801,13 @@ func newExpansionParent(stdout io.Writer, children ...*cobra.Command) *cobra.Com
 
 func newAIParent(stdout io.Writer, children ...*cobra.Command) *cobra.Command {
 	command := newParent("ai", "Modify DayZ Expansion AI resources")
+	command.SetOut(stdout)
+	command.AddCommand(children...)
+	return command
+}
+
+func newGetAIParent(stdout io.Writer, children ...*cobra.Command) *cobra.Command {
+	command := newParent("ai", "List DayZ Expansion AI resources")
 	command.SetOut(stdout)
 	command.AddCommand(children...)
 	return command

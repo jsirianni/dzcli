@@ -42,6 +42,28 @@ func TestVerbCommandMetadataAndHelp(t *testing.T) {
 	}
 }
 
+func TestExpansionAIParentSummariesByVerb(t *testing.T) {
+	tests := []struct {
+		name    string
+		command *cobra.Command
+		want    string
+	}{
+		{name: "get", command: NewGetCommand(&bytes.Buffer{}), want: "List DayZ Expansion AI resources"},
+		{name: "create", command: NewCreateCommand(&bytes.Buffer{}), want: "Modify DayZ Expansion AI resources"},
+		{name: "update", command: NewUpdateCommand(strings.NewReader(""), &bytes.Buffer{}), want: "Modify DayZ Expansion AI resources"},
+		{name: "delete", command: NewDeleteCommand(strings.NewReader(""), &bytes.Buffer{}), want: "Modify DayZ Expansion AI resources"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			aiCommand := childCommand(t, childCommand(t, test.command, "expansion"), "ai")
+			if aiCommand.Short != test.want {
+				t.Fatalf("expansion ai Short = %q, want %q", aiCommand.Short, test.want)
+			}
+		})
+	}
+}
+
 func TestValidateCommands(t *testing.T) {
 	tests := []struct {
 		name string
@@ -420,6 +442,17 @@ func assertNotContains(t *testing.T, haystack string, needle string) {
 	if strings.Contains(haystack, needle) {
 		t.Fatalf("%q contains %q", haystack, needle)
 	}
+}
+
+func childCommand(t *testing.T, command *cobra.Command, name string) *cobra.Command {
+	t.Helper()
+	for _, child := range command.Commands() {
+		if child.Name() == name {
+			return child
+		}
+	}
+	t.Fatalf("%s child command not found under %s", name, command.Name())
+	return nil
 }
 
 func firstOutputLine(output string) string {
