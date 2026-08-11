@@ -75,6 +75,8 @@ dzcli validate xml ./mpmissions/dayzOffline.chernarusplus/db/types.xml
 dzcli validate xml ./mpmissions/dayzOffline.chernarusplus
 ```
 
+Economy validation checks the full mission-root economy and requires `cfgeconomycore.xml`; use `dzcli validate xml <file-or-dir>` for XML well-formedness checks on partial economy folders.
+
 Preview an economy type update without writing the file:
 
 ```sh

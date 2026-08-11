@@ -84,6 +84,19 @@ type missionPath struct {
 	CorePath string
 }
 
+type MissingEconomyCoreError struct {
+	MissionRoot string
+	CorePath    string
+}
+
+func (err MissingEconomyCoreError) Error() string {
+	return fmt.Sprintf("full mission-root economy validation requires cfgeconomycore.xml, but %s is missing from %s; validate a complete mission root or cfgeconomycore.xml, or run `dzcli validate xml <file-or-dir>` for partial economy folders until standalone economy-file validation is available", err.CorePath, err.MissionRoot)
+}
+
+func (err MissingEconomyCoreError) Unwrap() error {
+	return os.ErrNotExist
+}
+
 var rootEconomyFiles = map[string]bool{
 	"cfgeconomycore.xml":          true,
 	"cfglimitsdefinition.xml":     true,
@@ -100,6 +113,10 @@ var rootEconomyFiles = map[string]bool{
 func InspectEconomy(path string) ([]FileStatus, error) {
 	resolved, err := ResolveMissionPath(path)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := requireEconomyCore(resolved); err != nil {
 		return nil, err
 	}
 
@@ -123,6 +140,16 @@ func InspectEconomy(path string) ([]FileStatus, error) {
 	statuses = append(statuses, inspectExistingFile(filepath.Join(resolved.Root, "cfgIgnoreList.xml"), "cfgIgnoreList", ValidateIgnoreListFile)...)
 	addAggregateWarnings(statuses, resolved.Root)
 	return statuses, nil
+}
+
+func requireEconomyCore(resolved missionPath) error {
+	if _, err := os.Stat(resolved.CorePath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return MissingEconomyCoreError{MissionRoot: resolved.Root, CorePath: resolved.CorePath}
+		}
+		return fmt.Errorf("stat %s: %w", resolved.CorePath, err)
+	}
+	return nil
 }
 
 func inspectRegisteredTerritoryFiles(environmentPath string, missionRoot string) []FileStatus {

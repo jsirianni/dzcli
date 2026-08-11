@@ -302,6 +302,37 @@ func TestRunReportsEconomyCoreParseFailure(t *testing.T) {
 	assertContains(t, stderr.String(), "expected <economycore> root")
 }
 
+func TestRunReportsMissingEconomyCoreDiagnostic(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	dir := partialEconomyDir(t)
+
+	code := Run([]string{"validate", "economy", dir}, &stdout, &stderr)
+
+	assertEqual(t, code, FailureExitCode)
+	assertEqual(t, stdout.String(), "")
+	assertContains(t, stderr.String(), "full mission-root economy validation requires cfgeconomycore.xml")
+	assertContains(t, stderr.String(), "dzcli validate xml <file-or-dir>")
+}
+
+func TestRunJSONReportsMissingEconomyCoreDiagnostic(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	dir := partialEconomyDir(t)
+
+	code := Run([]string{"--output", "json", "validate", "economy", dir}, &stdout, &stderr)
+
+	assertEqual(t, code, FailureExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	assertEqual(t, envelope["status"].(string), "failed")
+	failure := jsonObject(t, jsonArray(t, envelope["failures"])[0])
+	assertEqual(t, failure["kind"].(string), "economy")
+	assertEqual(t, failure["target_path"].(string), dir)
+	assertContains(t, failure["message"].(string), "full mission-root economy validation requires cfgeconomycore.xml")
+	assertContains(t, failure["message"].(string), "dzcli validate xml <file-or-dir>")
+}
+
 func TestRunReportsEachTypesFile(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -484,6 +515,17 @@ func mixedXMLDir(t *testing.T) string {
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "bad.xml"), `<?xml version="1.0" encoding="UTF-8"?><bad>`)
 	writeTestFile(t, filepath.Join(dir, "good.xml"), `<?xml version="1.0" encoding="UTF-8"?><good />`)
+	return dir
+}
+
+func partialEconomyDir(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "db"), 0o700); err != nil {
+		t.Fatalf("mkdir partial economy db: %v", err)
+	}
+	writeTestFile(t, filepath.Join(dir, "db", "types.xml"), `<?xml version="1.0" encoding="UTF-8"?><types />`)
 	return dir
 }
 
