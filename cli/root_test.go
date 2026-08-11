@@ -117,6 +117,44 @@ func TestRunJSONValidationFailureWritesEnvelopeToStdout(t *testing.T) {
 	assertEqual(t, len(files), 2)
 }
 
+func TestRunJSONXMLValidationReportsSingleFile(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	path := fixturePath(t, "xml", "valid", "root.xml")
+
+	code := Run([]string{"--output", "json", "validate", "xml", path}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	assertEqual(t, envelope["status"].(string), "ok")
+	assertEqual(t, envelope["target_path"].(string), path)
+	files := jsonArray(t, jsonObject(t, envelope["data"])["files"])
+	assertEqual(t, len(files), 1)
+	file := jsonObject(t, files[0])
+	assertEqual(t, file["kind"].(string), "xml")
+	assertEqual(t, file["target_path"].(string), path)
+	assertEqual(t, file["status"].(string), "ok")
+}
+
+func TestRunJSONXMLValidationRejectsNonXMLFile(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	path := fixturePath(t, "xml", "valid", "ignored.txt")
+
+	code := Run([]string{"--output", "json", "validate", "xml", path}, &stdout, &stderr)
+
+	assertEqual(t, code, FailureExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	assertEqual(t, envelope["status"].(string), "failed")
+	assertEqual(t, envelope["target_path"].(string), path)
+	failure := jsonObject(t, jsonArray(t, envelope["failures"])[0])
+	assertEqual(t, failure["kind"].(string), "xml")
+	assertEqual(t, failure["target_path"].(string), path)
+	assertContains(t, failure["message"].(string), "is not an XML file")
+}
+
 func TestRunJSONCommandErrorWritesFailureEnvelope(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -303,6 +341,19 @@ func TestRunReportsEachGenericXMLFile(t *testing.T) {
 	assertContains(t, stdout.String(), "xml "+filepath.Join(fixturePath(t, "xml", "valid"), "nested", "second.XML")+" ok")
 	assertContains(t, stdout.String(), "xml "+filepath.Join(fixturePath(t, "xml", "valid"), "root.xml")+" ok")
 	assertNotContains(t, stdout.String(), "ignored.txt")
+}
+
+func TestRunReportsSingleGenericXMLFile(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	path := fixturePath(t, "xml", "valid", "root.xml")
+
+	code := Run([]string{"validate", "xml", path}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	assertContains(t, stdout.String(), "xml "+path+" ok")
+	assertNotContains(t, stdout.String(), "second.XML")
 }
 
 func TestRunReportsInitValidation(t *testing.T) {

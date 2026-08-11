@@ -15,7 +15,7 @@ func TestNewCommandMetadata(t *testing.T) {
 	command := NewCommand(&bytes.Buffer{})
 
 	assertEqual(t, command.Use, "validate [path]")
-	assertEqual(t, command.Short, "Validate XML files recursively")
+	assertEqual(t, command.Short, "Validate XML files or directories recursively")
 }
 
 func TestNewCommandExecutesValidationWithExplicitPath(t *testing.T) {
@@ -29,6 +29,20 @@ func TestNewCommandExecutesValidationWithExplicitPath(t *testing.T) {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 	assertContains(t, stdout.String(), "root.xml ok")
+}
+
+func TestNewCommandExecutesValidationWithExplicitFilePath(t *testing.T) {
+	var stdout bytes.Buffer
+	path := fixturePath(t, "xml", "valid", "root.xml")
+	command := NewCommand(&stdout)
+	command.SetArgs([]string{path})
+
+	err := command.Execute()
+
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	assertContains(t, stdout.String(), "xml "+path+" ok")
 }
 
 func TestRunXMLValidateDefaultsToCurrentDirectory(t *testing.T) {
@@ -70,6 +84,18 @@ func TestValidateXMLPathReturnsNilWhenAllFilesParse(t *testing.T) {
 	assertContains(t, stdout.String(), "root.xml ok")
 }
 
+func TestValidateXMLPathReturnsNilWhenSingleFileParses(t *testing.T) {
+	var stdout bytes.Buffer
+	path := fixturePath(t, "xml", "valid", "root.xml")
+
+	err := ValidateXMLPath(path, &stdout)
+
+	if err != nil {
+		t.Fatalf("ValidateXMLPath returned error: %v", err)
+	}
+	assertContains(t, stdout.String(), "xml "+path+" ok")
+}
+
 func TestValidateXMLPathReturnsDiscoveryError(t *testing.T) {
 	var stdout bytes.Buffer
 
@@ -91,6 +117,24 @@ func TestValidateXMLPathReturnsValidationError(t *testing.T) {
 		t.Fatalf("err = %v, want validation.ErrFailed", err)
 	}
 	assertContains(t, stdout.String(), "failed")
+}
+
+func TestInspectXMLPathParsesSingleXMLFile(t *testing.T) {
+	path := fixturePath(t, "xml", "valid", "root.xml")
+
+	statuses, err := InspectXMLPath(path)
+	if err != nil {
+		t.Fatalf("InspectXMLPath returned error: %v", err)
+	}
+
+	if len(statuses) != 1 {
+		t.Fatalf("status count = %d, want 1", len(statuses))
+	}
+	assertEqual(t, statuses[0].Path, path)
+	assertEqual(t, statuses[0].Kind, "xml")
+	if statuses[0].Err != nil {
+		t.Fatalf("XML status err = %v, want nil", statuses[0].Err)
+	}
 }
 
 func TestInspectXMLPathFindsAndParsesGenericXMLFiles(t *testing.T) {
@@ -140,12 +184,34 @@ func TestFindXMLFilesReturnsEmptyWhenDirectoryHasNoXML(t *testing.T) {
 	assertEqual(t, len(files), 0)
 }
 
-func TestFindXMLFilesReturnsReadDirectoryError(t *testing.T) {
+func TestFindXMLFilesReturnsSingleXMLFile(t *testing.T) {
+	path := fixturePath(t, "xml", "valid", "root.xml")
+
+	files, err := FindXMLFiles(path)
+	if err != nil {
+		t.Fatalf("FindXMLFiles returned error: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("file count = %d, want 1", len(files))
+	}
+	assertEqual(t, files[0], path)
+}
+
+func TestFindXMLFilesRejectsNonXMLFile(t *testing.T) {
+	_, err := FindXMLFiles(fixturePath(t, "xml", "valid", "ignored.txt"))
+	if err == nil {
+		t.Fatal("err = nil, want non-XML file error")
+	}
+	assertContains(t, err.Error(), "is not an XML file")
+}
+
+func TestFindXMLFilesReturnsPathInspectionError(t *testing.T) {
 	_, err := FindXMLFiles(fixturePath(t, "xml", "missing"))
 	if err == nil {
-		t.Fatal("err = nil, want read directory error")
+		t.Fatal("err = nil, want path inspection error")
 	}
-	assertContains(t, err.Error(), "read directory")
+	assertContains(t, err.Error(), "inspect path")
 }
 
 func TestParseGenericXMLFileReportsReadFailure(t *testing.T) {

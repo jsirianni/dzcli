@@ -48,11 +48,19 @@ Validate XML files recursively from the current directory:
 dzcli validate xml
 ```
 
-Validate XML files under a target path:
+Validate one XML file:
+
+```sh
+dzcli validate xml ./mpmissions/dayzOffline.chernarusplus/db/types.xml
+```
+
+Validate XML files recursively under a target directory:
 
 ```sh
 dzcli validate xml ./mpmissions/dayzOffline.chernarusplus
 ```
+
+Passing a single non-XML file path returns an error. Non-XML files inside directories are ignored.
 
 Use this for broad XML well-formedness checks. Use `validate economy` for DayZ economy semantics.
 

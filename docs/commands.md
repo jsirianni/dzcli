@@ -1739,7 +1739,7 @@ dzcli validate
 | `init` | Validate DayZ mission init.c |
 | `server` | Validate serverDZ.cfg |
 | `weather` | Validate cfgweather.xml |
-| `xml` | Validate XML files recursively |
+| `xml` | Validate XML files or directories recursively |
 
 ### Flags
 
@@ -1880,7 +1880,7 @@ dzcli validate weather <cfgweather.xml>
 
 ## dzcli validate xml
 
-Validate XML files recursively
+Validate XML files or directories recursively
 
 ### Usage
 

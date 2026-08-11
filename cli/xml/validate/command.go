@@ -25,7 +25,7 @@ type FileStatus struct {
 func NewCommand(stdout io.Writer) *cobra.Command {
 	return &cobra.Command{
 		Use:   "validate [path]",
-		Short: "Validate XML files recursively",
+		Short: "Validate XML files or directories recursively",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := "."
@@ -73,8 +73,20 @@ func InspectXMLPath(path string) ([]FileStatus, error) {
 }
 
 func FindXMLFiles(path string) ([]string, error) {
+	cleanPath := filepath.Clean(path)
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("inspect path %s: %w", cleanPath, err)
+	}
+	if !info.IsDir() {
+		if !isXMLPath(cleanPath) {
+			return nil, fmt.Errorf("%s is not an XML file", cleanPath)
+		}
+		return []string{cleanPath}, nil
+	}
+
 	var files []string
-	dirs := []string{filepath.Clean(path)}
+	dirs := []string{cleanPath}
 
 	for len(dirs) > 0 {
 		dir := dirs[0]
@@ -91,7 +103,7 @@ func FindXMLFiles(path string) ([]string, error) {
 				dirs = append(dirs, entryPath)
 				continue
 			}
-			if strings.EqualFold(filepath.Ext(entry.Name()), ".xml") {
+			if isXMLPath(entry.Name()) {
 				files = append(files, entryPath)
 			}
 		}
@@ -99,6 +111,10 @@ func FindXMLFiles(path string) ([]string, error) {
 
 	sort.Strings(files)
 	return files, nil
+}
+
+func isXMLPath(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".xml")
 }
 
 func ParseGenericXMLFile(path string) error {
