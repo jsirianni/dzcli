@@ -16,9 +16,9 @@ type catalogReference struct {
 }
 
 type featureCatalogEntry struct {
-	ID           string         `json:"id"`
+	ID           string             `json:"id"`
 	References   []catalogReference `json:"references"`
-	Requirements map[string]int `json:"requirements"`
+	Requirements map[string]int     `json:"requirements"`
 }
 
 type ruleCatalogEntry struct {
@@ -34,17 +34,17 @@ type caseDiagnostic struct {
 }
 
 type caseMetadata struct {
-	ID             string             `json:"id"`
-	Dialect        string             `json:"dialect"`
-	Phase          string             `json:"phase"`
-	Classification string             `json:"classification"`
-	Features       []string           `json:"features"`
-	Rules          []string           `json:"rules"`
+	ID             string   `json:"id"`
+	Dialect        string   `json:"dialect"`
+	Phase          string   `json:"phase"`
+	Classification string   `json:"classification"`
+	Features       []string `json:"features"`
+	Rules          []string `json:"rules"`
 	Expected       struct {
-		SyntaxValid  bool             `json:"syntaxValid"`
-		Valid        bool             `json:"valid"`
-		AnalysisExact bool            `json:"analysisExact"`
-		Diagnostics  []caseDiagnostic `json:"diagnostics"`
+		SyntaxValid   bool             `json:"syntaxValid"`
+		Valid         bool             `json:"valid"`
+		AnalysisExact bool             `json:"analysisExact"`
+		Diagnostics   []caseDiagnostic `json:"diagnostics"`
 	} `json:"expected"`
 	References []catalogReference `json:"references"`
 	Tags       []string           `json:"tags"`
@@ -204,7 +204,7 @@ func TestCorpusBehavior(t *testing.T) {
 				t.Fatal(err)
 			}
 			if result.SyntaxValid != item.Expected.SyntaxValid || result.Valid != item.Expected.Valid || result.AnalysisExact != item.Expected.AnalysisExact {
-				t.Fatalf("status = syntax:%v valid:%v exact:%v", result.SyntaxValid, result.Valid, result.AnalysisExact)
+				t.Fatalf("status = syntax:%v valid:%v exact:%v diagnostics=%#v", result.SyntaxValid, result.Valid, result.AnalysisExact, result.Diagnostics)
 			}
 			for _, expected := range item.Expected.Diagnostics {
 				if !hasCode(result.Diagnostics, expected.Code) {

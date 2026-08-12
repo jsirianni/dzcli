@@ -19,3 +19,11 @@ type token struct {
 	parts  []WordPart
 	quoted bool
 }
+
+func cloneTokens(items []token) []token {
+	result := append([]token(nil), items...)
+	for index := range result {
+		result[index].parts = append([]WordPart(nil), result[index].parts...)
+	}
+	return result
+}

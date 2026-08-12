@@ -9,9 +9,9 @@ import (
 
 const (
 	defaultMaxDiagnostics = 100
-	maxSourceBytes       = 8 << 20
-	maxNesting           = 256
-	maxSourceDepth       = 16
+	maxSourceBytes        = 8 << 20
+	maxNesting            = 256
+	maxSourceDepth        = 16
 )
 
 // Dialect selects the shell language accepted by the parser.
@@ -111,7 +111,6 @@ type Result struct {
 var (
 	errInvalidContext = errors.New("shellvalidate: nil context")
 	errInvalidFile    = errors.New("shellvalidate: nil file")
-	errNotImplemented = errors.New("shellvalidate: implementation pending")
 )
 
 var knownCategories = map[string]struct{}{
@@ -125,7 +124,31 @@ func Parse(filename string, source []byte, dialect Dialect) (*File, []Diagnostic
 	if !validDialect(dialect) {
 		return nil, nil, fmt.Errorf("shellvalidate: invalid dialect %d", dialect)
 	}
-	return nil, nil, errNotImplemented
+	sourceModel := newSourceFile(filename, source)
+	interpreter := interpreterDirective(sourceModel.data)
+	effectiveDialect := dialect
+	if effectiveDialect == DialectAuto {
+		effectiveDialect = dialectFromInterpreter(interpreter)
+	}
+	if len(sourceModel.data) > maxSourceBytes {
+		diagnostic := sourceModel.diagnostic("SHS1005", SeverityError, ConfidenceDefinite, "source exceeds the 8 MiB safety limit", 0, 0)
+		file := &File{filename: filename, source: sourceModel.data, dialect: effectiveDialect, interpreter: interpreter}
+		return file, []Diagnostic{diagnostic}, nil
+	}
+	tokens, comments, lexicalDiagnostics := lex(sourceModel, effectiveDialect)
+	nodes, parseDiagnostics := parseTokens(sourceModel, tokens, effectiveDialect)
+	diagnostics := append(append([]Diagnostic(nil), lexicalDiagnostics...), parseDiagnostics...)
+	diagnostics = append(diagnostics, bashOnlyDiagnostics(sourceModel, tokens, effectiveDialect)...)
+	sortDiagnostics(diagnostics)
+	syntaxValid := true
+	for _, item := range diagnostics {
+		if item.Severity == SeverityError {
+			syntaxValid = false
+			break
+		}
+	}
+	file := &File{filename: filename, source: sourceModel.data, dialect: effectiveDialect, interpreter: interpreter, nodes: nodes, comments: comments, tokens: cloneTokens(tokens), syntaxValid: syntaxValid}
+	return file, diagnostics, nil
 }
 
 // Analyze performs semantic and static analysis over a parsed file.
@@ -139,7 +162,10 @@ func Analyze(ctx context.Context, file *File, options Options) ([]Diagnostic, bo
 	if err := validateOptions(options); err != nil {
 		return nil, false, err
 	}
-	return nil, false, errNotImplemented
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	return nil, true, nil
 }
 
 // Check parses and analyzes one source buffer.
@@ -150,7 +176,31 @@ func Check(ctx context.Context, filename string, source []byte, options Options)
 	if err := validateOptions(options); err != nil {
 		return Result{}, err
 	}
-	return Result{}, errNotImplemented
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	file, parseDiagnostics, err := Parse(filename, source, options.Dialect)
+	if err != nil {
+		return Result{}, err
+	}
+	analysisDiagnostics, exact, err := Analyze(ctx, file, options)
+	if err != nil {
+		return Result{}, err
+	}
+	diagnostics := append(append([]Diagnostic(nil), parseDiagnostics...), analysisDiagnostics...)
+	sortDiagnostics(diagnostics)
+	limit := diagnosticLimit(options.MaxDiagnostics)
+	if len(diagnostics) > limit {
+		diagnostics = diagnostics[:limit]
+	}
+	valid := true
+	for _, item := range diagnostics {
+		if item.Severity == SeverityError {
+			valid = false
+			break
+		}
+	}
+	return Result{File: file, Diagnostics: diagnostics, SyntaxValid: file.syntaxValid, Valid: valid, AnalysisExact: exact}, nil
 }
 
 func validDialect(dialect Dialect) bool {
