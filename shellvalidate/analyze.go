@@ -375,61 +375,8 @@ type variablePass struct{}
 func (variablePass) ID() passID         { return passVariables }
 func (variablePass) Requires() []passID { return []passID{passSymbols} }
 func (variablePass) Run(analysis *analysisContext) error {
-	assigned := predefinedVariables()
-	nounset := false
-	for _, command := range analysis.commands {
-		if command.name == "set" {
-			for index, argument := range command.arguments {
-				value, known := staticWordValue(argument)
-				next := ""
-				if index+1 < len(command.arguments) {
-					next, _ = staticWordValue(command.arguments[index+1])
-				}
-				if known && (value == "-u" || value == "-o" && next == "nounset") {
-					nounset = true
-				}
-				if known && value == "+u" {
-					nounset = false
-				}
-			}
-		}
-		for _, item := range command.assignments {
-			if nounset {
-				for _, reference := range parameterReferences(item) {
-					if _, ok := assigned[reference.name]; ok || reference.name == "" || reference.name[0] >= '0' && reference.name[0] <= '9' {
-						continue
-					}
-					analysis.add("variables", analysis.source.diagnostic("SHV1001", SeverityWarning, ConfidenceDefinite, "variable is read while nounset is enabled and no assignment is visible", reference.start, reference.end))
-				}
-			}
-		}
-		for _, item := range command.assignments {
-			name, _, _ := assignmentValue(item)
-			assigned[name] = variableState{}
-		}
-		if command.name == "read" {
-			for _, argument := range command.arguments {
-				value, known := staticWordValue(argument)
-				if known && validName(value) {
-					assigned[value] = variableState{}
-				}
-			}
-			if command.pipelineIn || command.pipelineOut {
-				analysis.add("variables", analysis.source.diagnostic("SHV1002", SeverityWarning, ConfidenceLikely, "read runs in a pipeline context, so assigned variables may not reach the parent shell", command.nameWord.span.Start.Offset, command.end))
-			}
-		}
-		if !nounset {
-			continue
-		}
-		for _, argument := range command.arguments {
-			for _, reference := range parameterReferences(argument) {
-				if _, ok := assigned[reference.name]; ok || reference.name == "" || reference.name[0] >= '0' && reference.name[0] <= '9' {
-					continue
-				}
-				analysis.add("variables", analysis.source.diagnostic("SHV1001", SeverityWarning, ConfidenceDefinite, "variable is read while nounset is enabled and no assignment is visible", reference.start, reference.end))
-			}
-		}
-	}
+	flow := dataflowAnalyzer{analysis: analysis}
+	flow.analyze(analysis.file.nodes, newFlowState(), flowFrame{kind: contextCurrentShell})
 	return nil
 }
 
