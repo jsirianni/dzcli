@@ -180,7 +180,7 @@ func scanWord(source *sourceFile, start int, dialect Dialect) (token, int, []Dia
 			literalStart := index
 			for index < len(source.data) {
 				current := source.data[index]
-				if current == 0 {
+				if current == 0 || current == '\t' {
 					break
 				}
 				if bytes.ContainsRune([]byte(" \\t\r\n\\'\"$`#<>|&;(){}"), rune(current)) || operatorAt(source.data, index, dialect) != "" {

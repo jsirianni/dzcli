@@ -94,11 +94,14 @@ func loadCorpus(t *testing.T) []caseMetadata {
 func TestCorpusMetadata(t *testing.T) {
 	var features []featureCatalogEntry
 	var rules []ruleCatalogEntry
+	var unitRuleCoverage []string
 	readJSONFile(t, "testdata/features.json", &features)
 	readJSONFile(t, "testdata/rules.json", &rules)
+	readJSONFile(t, "testdata/rule_unit_coverage.json", &unitRuleCoverage)
 	featureSet := make(map[string]struct{})
 	ruleSet := make(map[string]struct{})
 	categorySet := make(map[string]struct{})
+	ruleCases := make(map[string]int)
 	for _, item := range features {
 		if item.ID == "" || len(item.References) == 0 {
 			t.Fatalf("invalid feature entry: %#v", item)
@@ -118,6 +121,12 @@ func TestCorpusMetadata(t *testing.T) {
 		ruleSet[item.Code] = struct{}{}
 		categorySet[item.Category] = struct{}{}
 	}
+	for _, code := range unitRuleCoverage {
+		if _, ok := ruleSet[code]; !ok {
+			t.Fatalf("unit coverage references unknown rule %s", code)
+		}
+		ruleCases[code]++
+	}
 	for category := range categorySet {
 		if _, ok := knownCategories[category]; !ok {
 			t.Fatalf("catalog has unknown category %q", category)
@@ -126,7 +135,6 @@ func TestCorpusMetadata(t *testing.T) {
 
 	caseIDs := make(map[string]struct{})
 	featureCases := make(map[string]map[string]int)
-	ruleCases := make(map[string]int)
 	for _, item := range loadCorpus(t) {
 		if item.ID == "" || item.Dialect == "" || item.Phase == "" || item.Classification == "" || len(item.References) == 0 {
 			t.Fatalf("invalid case metadata: %#v", item)
@@ -168,6 +176,11 @@ func TestCorpusMetadata(t *testing.T) {
 			if featureCases[feature.ID][name] < count {
 				t.Errorf("feature %s needs %d %s cases; got %d", feature.ID, count, name, featureCases[feature.ID][name])
 			}
+		}
+	}
+	for _, rule := range rules {
+		if ruleCases[rule.Code] == 0 {
+			t.Errorf("rule %s has no corpus or unit coverage", rule.Code)
 		}
 	}
 }
