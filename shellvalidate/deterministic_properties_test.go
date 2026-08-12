@@ -824,6 +824,21 @@ func TestCommittedFuzzSeedReplay(t *testing.T) {
 	for _, rule := range rules {
 		knownObligations[rule.Code] = struct{}{}
 	}
+	for _, entry := range mustLoadCatalog[lexicalEntry](t, "lexical") {
+		knownObligations[entry.ID] = struct{}{}
+	}
+	for _, entry := range mustLoadCatalog[grammarEntry](t, "grammar") {
+		knownObligations[entry.ID] = struct{}{}
+	}
+	for _, entry := range mustLoadCatalog[dialectEntry](t, "dialects") {
+		knownObligations[entry.ID] = struct{}{}
+	}
+	for _, entry := range mustLoadCatalog[semanticEntry](t, "semantics") {
+		knownObligations[entry.ID] = struct{}{}
+	}
+	for _, entry := range mustLoadCatalog[robustnessEntry](t, "robustness") {
+		knownObligations[entry.ID] = struct{}{}
+	}
 	for index, seed := range corpus.Seeds {
 		if seed.ID == "" || seed.Feature == "" {
 			t.Fatalf("invalid seed %#v", seed)
@@ -832,6 +847,9 @@ func TestCommittedFuzzSeedReplay(t *testing.T) {
 			t.Fatalf("duplicate seed %s", seed.ID)
 		}
 		seen[seed.ID] = struct{}{}
+		if _, exists := knownObligations[seed.Feature]; !exists {
+			t.Fatalf("%s: unknown feature obligation %q", seed.ID, seed.Feature)
+		}
 		source, err := hex.DecodeString(seed.Hex)
 		if err != nil {
 			t.Fatal(err)
