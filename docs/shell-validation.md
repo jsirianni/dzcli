@@ -25,3 +25,10 @@ catalogs. Syntax recovery excludes incomplete subtrees from semantic analysis.
 Production code uses only the Go standard library. It does not spawn a shell,
 load native code, access the network, traverse the filesystem, or read sourced
 files implicitly.
+
+The package test suite uses specification-traceable catalogs, stable AST
+snapshots, bounded exhaustive generation, deterministic interaction arrays,
+input mutations, replayable fuzz regressions, and critical implementation
+mutants. Its exhaustive claim applies to the declared finite models and bounds,
+not to the unbounded set of all shell programs. See
+`shellvalidate/TESTING.md` for the exact counts, bounds, and CI tiers.

@@ -39,3 +39,11 @@ nesting, and 16 recursive literal `eval` or sourced-file analyses.
 Production code uses only the Go standard library and supports
 `CGO_ENABLED=0`. Normal package operation and tests do not invoke external
 programs or access the network.
+
+## Test model
+
+The deterministic conformance suite is documented in [TESTING.md](TESTING.md).
+It provides machine-audited traceability, bounded exhaustive generation,
+interaction coverage, input mutations, fuzz-regression replay, and critical
+implementation-mutant probes. “Exhaustive” is limited to the declared finite
+models and does not mean enumeration of every possible shell script.

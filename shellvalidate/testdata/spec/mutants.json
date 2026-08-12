@@ -1,0 +1,16 @@
+[
+  {"id":"LEX001","sourceOrder":1,"target":"maximal-munch operator selection","critical":true,"killedBy":"TestMutationKillAudit/LEX001"},
+  {"id":"LEX002","sourceOrder":2,"target":"NUL detection in nested lexical modes","critical":true,"killedBy":"TestMutationKillAudit/LEX002"},
+  {"id":"PAR001","sourceOrder":3,"target":"required compound closer","critical":true,"killedBy":"TestMutationKillAudit/PAR001"},
+  {"id":"PAR002","sourceOrder":4,"target":"right-associative arithmetic assignment","critical":true,"killedBy":"TestMutationKillAudit/PAR002"},
+  {"id":"PAR003","sourceOrder":5,"target":"arithmetic multiplication precedence","critical":true,"killedBy":"TestMutationKillAudit/PAR003"},
+  {"id":"PAR004","sourceOrder":6,"target":"POSIX dialect gate","critical":true,"killedBy":"TestMutationKillAudit/PAR004"},
+  {"id":"PAR005","sourceOrder":7,"target":"here-document recognition in arithmetic mode","critical":true,"killedBy":"TestMutationKillAudit/PAR005"},
+  {"id":"ANA001","sourceOrder":8,"target":"control diagnostic emission","critical":true,"killedBy":"TestMutationKillAudit/ANA001"},
+  {"id":"ANA002","sourceOrder":9,"target":"quoted-expansion non-trigger","critical":true,"killedBy":"TestMutationKillAudit/ANA002"},
+  {"id":"ANA003","sourceOrder":10,"target":"dynamic-analysis uncertainty propagation","critical":true,"killedBy":"TestMutationKillAudit/ANA003"},
+  {"id":"API001","sourceOrder":11,"target":"diagnostic half-open end span","critical":true,"killedBy":"TestMutationKillAudit/API001"},
+  {"id":"API002","sourceOrder":12,"target":"diagnostic cap enforcement","critical":true,"killedBy":"TestMutationKillAudit/API002"},
+  {"id":"REC001","sourceOrder":13,"target":"recovery progress after unexpected closer","critical":true,"killedBy":"TestMutationKillAudit/REC001"},
+  {"id":"SRC001","sourceOrder":14,"target":"source-cycle uncertainty propagation","critical":true,"killedBy":"TestMutationKillAudit/SRC001"}
+]
