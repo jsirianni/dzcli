@@ -3,9 +3,6 @@ package shellvalidate
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -31,6 +28,7 @@ type analysisPass interface {
 type analysisState struct {
 	depth   int
 	visited map[string]struct{}
+	unitID  string
 }
 
 type analysisContext struct {
@@ -55,9 +53,11 @@ type variableState struct {
 
 type commandView struct {
 	name         string
-	nameToken    token
-	arguments    []token
-	tokens       []token
+	nameKnown    bool
+	nameWord     Word
+	hasName      bool
+	assignments  []Word
+	arguments    []Word
 	start        int
 	end          int
 	pipelineIn   bool
@@ -66,16 +66,26 @@ type commandView struct {
 }
 
 func runAnalysis(ctx context.Context, file *File, options Options, state *analysisState) ([]Diagnostic, bool, error) {
+	if options.Dialect != DialectAuto && options.Dialect != file.dialect {
+		return nil, false, fmt.Errorf("shellvalidate: analysis dialect %d does not match parsed file dialect %d", options.Dialect, file.dialect)
+	}
+	if state.unitID == "" {
+		state.unitID = "source:" + normalizeSourceIdentity(file.filename)
+		state.visited[state.unitID] = struct{}{}
+	}
 	analysis := &analysisContext{
 		ctx:        ctx,
 		file:       file,
 		source:     newSourceFile(file.filename, file.source),
 		options:    options,
-		commands:   commandViews(file.tokens),
+		commands:   commandViewsFromFile(file),
 		exact:      true,
 		state:      state,
 		categories: enabledCategories(options),
 		assigned:   predefinedVariables(),
+	}
+	if hasIncompleteNodes(file.nodes) {
+		analysis.inexact(0, len(file.source), "syntax recovery excluded incomplete commands from analysis")
 	}
 	passes := []analysisPass{
 		dialectPass{}, symbolPass{}, variablePass{}, expansionPass{}, controlPass{},
@@ -108,6 +118,64 @@ func runAnalysis(ctx context.Context, file *File, options Options, state *analys
 		analysis.diagnostics = analysis.diagnostics[:limit]
 	}
 	return analysis.diagnostics, analysis.exact, nil
+}
+
+// commandViewsFromFile derives executable commands from the syntax tree. This
+// avoids treating compound-command keywords and here-document bodies as
+// ordinary commands, and lets recovery exclude incomplete subtrees.
+func commandViewsFromFile(file *File) []commandView {
+	var result []commandView
+	var walk func(Node, bool, bool, bool)
+	walk = func(node Node, pipelineIn, pipelineOut, pipelineContext bool) {
+		if node.incomplete {
+			return
+		}
+		switch node.kind {
+		case NodeCommand, NodeAssignment:
+			view := commandViewFromNode(node)
+			view.pipelineIn = pipelineIn || pipelineContext
+			view.pipelineOut = pipelineOut || pipelineContext
+			result = append(result, view)
+		case NodePipeline:
+			for index, child := range node.children {
+				walk(child, index > 0, index+1 < len(node.children), pipelineContext || len(node.children) > 1)
+			}
+		default:
+			for _, child := range node.children {
+				walk(child, pipelineIn, pipelineOut, pipelineContext || pipelineIn || pipelineOut)
+			}
+		}
+	}
+	for _, node := range file.nodes {
+		walk(node, false, false, false)
+	}
+	return result
+}
+
+func commandViewFromNode(node Node) commandView {
+	view := commandView{
+		assignments: append([]Word(nil), node.assignments...),
+		start:       node.span.Start.Offset,
+		end:         node.span.End.Offset,
+	}
+	commandIndex := len(node.assignments)
+	if commandIndex >= len(node.words) {
+		return view
+	}
+	view.hasName = true
+	view.nameWord = node.words[commandIndex]
+	view.name, view.nameKnown = staticWordValue(view.nameWord)
+	view.arguments = append([]Word(nil), node.words[commandIndex+1:]...)
+	return view
+}
+
+func hasIncompleteNodes(nodes []Node) bool {
+	for _, node := range nodes {
+		if node.incomplete || hasIncompleteNodes(node.children) {
+			return true
+		}
+	}
+	return false
 }
 
 func requirementsMet(required []passID, completed map[passID]bool) bool {
@@ -145,70 +213,6 @@ func (analysis *analysisContext) add(category string, diagnostic Diagnostic) {
 func (analysis *analysisContext) inexact(start, end int, message string) {
 	analysis.exact = false
 	analysis.add("incomplete", analysis.source.diagnostic("SHI1001", SeverityInfo, ConfidenceDefinite, message, start, end))
-}
-
-func commandViews(tokens []token) []commandView {
-	var result []commandView
-	var current []token
-	pipelineIn := false
-	flush := func(pipelineOut, background bool) {
-		if len(current) == 0 {
-			return
-		}
-		view := makeCommandView(current)
-		view.pipelineIn, view.pipelineOut, view.backgrounded = pipelineIn, pipelineOut, background
-		result = append(result, view)
-		current = nil
-		pipelineIn = pipelineOut
-	}
-	for _, item := range tokens {
-		if item.kind == tokenComment || item.kind == tokenEOF {
-			continue
-		}
-		if item.kind == tokenNewline {
-			flush(false, false)
-			pipelineIn = false
-			continue
-		}
-		if item.kind == tokenOperator && isCommandSeparator(item.text) {
-			isPipeline := item.text == "|" || item.text == "|&"
-			flush(isPipeline, item.text == "&")
-			if !isPipeline {
-				pipelineIn = false
-			}
-			continue
-		}
-		current = append(current, item)
-	}
-	flush(false, false)
-	return result
-}
-
-func makeCommandView(tokens []token) commandView {
-	view := commandView{tokens: append([]token(nil), tokens...), start: tokens[0].start, end: tokens[len(tokens)-1].end}
-	redirectionOperand := false
-	for _, item := range tokens {
-		if item.kind == tokenOperator && isRedirection(item.text) {
-			redirectionOperand = true
-			continue
-		}
-		if item.kind != tokenWord {
-			continue
-		}
-		if redirectionOperand {
-			redirectionOperand = false
-			continue
-		}
-		if view.name == "" && isAssignmentWord(item.text) {
-			continue
-		}
-		if view.name == "" {
-			view.name, view.nameToken = item.text, item
-		} else {
-			view.arguments = append(view.arguments, item)
-		}
-	}
-	return view
 }
 
 func isRedirection(value string) bool {
@@ -292,18 +296,52 @@ type symbolPass struct{}
 func (symbolPass) ID() passID         { return passSymbols }
 func (symbolPass) Requires() []passID { return []passID{passDialect} }
 func (symbolPass) Run(analysis *analysisContext) error {
-	for _, item := range analysis.file.tokens {
-		if item.kind != tokenWord || !isAssignmentWord(item.text) {
-			continue
+	for _, command := range analysis.commands {
+		for _, item := range command.assignments {
+			name, value, known := assignmentValue(item)
+			state := variableState{constant: value, known: known}
+			state.array = strings.HasPrefix(value, "(")
+			analysis.assigned[name] = state
 		}
-		index := strings.IndexByte(item.text, '=')
-		name := strings.TrimSuffix(item.text[:index], "+")
-		value := item.text[index+1:]
-		state := variableState{constant: value, known: !strings.ContainsAny(value, "$`")}
-		state.array = strings.HasPrefix(value, "(")
-		analysis.assigned[name] = state
 	}
 	return nil
+}
+
+func assignmentValue(word Word) (name, value string, known bool) {
+	if literal, ok := staticWordValue(word); ok {
+		if index := strings.IndexByte(literal, '='); index >= 0 {
+			return strings.TrimSuffix(literal[:index], "+"), literal[index+1:], true
+		}
+	}
+	var prefix strings.Builder
+	for _, part := range word.parts {
+		if part.kind != WordLiteral || part.quote != QuoteUnquoted {
+			break
+		}
+		prefix.Write(part.text)
+		if index := strings.IndexByte(prefix.String(), '='); index >= 0 {
+			return strings.TrimSuffix(prefix.String()[:index], "+"), "", false
+		}
+	}
+	return "", "", false
+}
+
+func wordContainsPartKind(word Word, kind WordPartKind) bool {
+	for _, part := range word.parts {
+		if part.kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func wordContainsBytes(word Word, needle []byte) bool {
+	for _, part := range word.parts {
+		if strings.Contains(string(part.text), string(needle)) {
+			return true
+		}
+	}
+	return false
 }
 
 type expansionPass struct{}
@@ -311,9 +349,11 @@ type expansionPass struct{}
 func (expansionPass) ID() passID         { return passExpansion }
 func (expansionPass) Requires() []passID { return []passID{passSymbols} }
 func (expansionPass) Run(analysis *analysisContext) error {
-	for _, item := range analysis.file.tokens {
-		if item.kind == tokenWord && isAssignmentWord(item.text) && strings.Contains(item.text, "$(") && strings.Contains(item.text, "\\n") {
-			analysis.add("expansion", analysis.source.diagnostic("SHE1002", SeverityWarning, ConfidenceDefinite, "command substitution removes trailing newline bytes from this value", item.start, item.end))
+	for _, command := range analysis.commands {
+		for _, assignment := range command.assignments {
+			if wordContainsPartKind(assignment, WordCommandSubstitution) && wordContainsBytes(assignment, []byte("\\n")) {
+				analysis.add("expansion", analysis.source.diagnostic("SHE1002", SeverityWarning, ConfidenceDefinite, "command substitution removes trailing newline bytes from this value", assignment.span.Start.Offset, assignment.span.End.Offset))
+			}
 		}
 	}
 	for _, command := range analysis.commands {
@@ -321,10 +361,7 @@ func (expansionPass) Run(analysis *analysisContext) error {
 			if command.name == "[[" || command.name == "((" || (argumentIndex == 0 && command.name == "case") {
 				continue
 			}
-			for _, occurrence := range unquotedExpansionSpans(analysis.source, argument) {
-				if strings.HasPrefix(argument.text, "$((") || argument.text == "$@" {
-					continue
-				}
+			for _, occurrence := range unquotedExpansionSpans(argument) {
 				diagnostic := analysis.source.diagnostic("SHE1001", SeverityWarning, ConfidenceLikely, "unquoted expansion may split into multiple arguments or expand path patterns", occurrence.Start.Offset, occurrence.End.Offset)
 				analysis.add("expansion", diagnostic)
 			}
@@ -343,35 +380,49 @@ func (variablePass) Run(analysis *analysisContext) error {
 	for _, command := range analysis.commands {
 		if command.name == "set" {
 			for index, argument := range command.arguments {
-				if argument.text == "-u" || argument.text == "-o" && index+1 < len(command.arguments) && command.arguments[index+1].text == "nounset" {
+				value, known := staticWordValue(argument)
+				next := ""
+				if index+1 < len(command.arguments) {
+					next, _ = staticWordValue(command.arguments[index+1])
+				}
+				if known && (value == "-u" || value == "-o" && next == "nounset") {
 					nounset = true
 				}
-				if argument.text == "+u" {
+				if known && value == "+u" {
 					nounset = false
 				}
 			}
 		}
-		for _, item := range command.tokens {
-			if item.kind == tokenWord && isAssignmentWord(item.text) {
-				index := strings.IndexByte(item.text, '=')
-				assigned[strings.TrimSuffix(item.text[:index], "+")] = variableState{}
+		for _, item := range command.assignments {
+			if nounset {
+				for _, reference := range parameterReferences(item) {
+					if _, ok := assigned[reference.name]; ok || reference.name == "" || reference.name[0] >= '0' && reference.name[0] <= '9' {
+						continue
+					}
+					analysis.add("variables", analysis.source.diagnostic("SHV1001", SeverityWarning, ConfidenceDefinite, "variable is read while nounset is enabled and no assignment is visible", reference.start, reference.end))
+				}
 			}
+		}
+		for _, item := range command.assignments {
+			name, _, _ := assignmentValue(item)
+			assigned[name] = variableState{}
 		}
 		if command.name == "read" {
 			for _, argument := range command.arguments {
-				if validName(argument.text) {
-					assigned[argument.text] = variableState{}
+				value, known := staticWordValue(argument)
+				if known && validName(value) {
+					assigned[value] = variableState{}
 				}
 			}
 			if command.pipelineIn || command.pipelineOut {
-				analysis.add("variables", analysis.source.diagnostic("SHV1002", SeverityWarning, ConfidenceLikely, "read runs in a pipeline context, so assigned variables may not reach the parent shell", command.nameToken.start, command.end))
+				analysis.add("variables", analysis.source.diagnostic("SHV1002", SeverityWarning, ConfidenceLikely, "read runs in a pipeline context, so assigned variables may not reach the parent shell", command.nameWord.span.Start.Offset, command.end))
 			}
 		}
 		if !nounset {
 			continue
 		}
 		for _, argument := range command.arguments {
-			for _, reference := range parameterReferences(analysis.source, argument) {
+			for _, reference := range parameterReferences(argument) {
 				if _, ok := assigned[reference.name]; ok || reference.name == "" || reference.name[0] >= '0' && reference.name[0] <= '9' {
 					continue
 				}
@@ -387,92 +438,48 @@ type parameterReference struct {
 	start, end int
 }
 
-func parameterReferences(source *sourceFile, item token) []parameterReference {
-	data := source.data[item.start:item.end]
+func parameterReferences(item Word) []parameterReference {
 	var result []parameterReference
-	quote := byte(0)
-	for index := 0; index < len(data); index++ {
-		if quote == '\'' {
-			if data[index] == '\'' {
-				quote = 0
+	for _, part := range item.parts {
+		if part.kind != WordParameterExpansion {
+			continue
+		}
+		for index := 0; index < len(part.text); index++ {
+			if part.text[index] != '$' || index+1 >= len(part.text) || part.text[index+1] == '(' {
+				continue
 			}
-			continue
-		}
-		if data[index] == '\'' {
-			quote = '\''
-			continue
-		}
-		if data[index] != '$' || index+1 >= len(data) || data[index+1] == '(' {
-			continue
-		}
-		cursor := index + 1
-		braced := cursor < len(data) && data[cursor] == '{'
-		if braced {
-			cursor++
-		}
-		nameStart := cursor
-		for cursor < len(data) && isNameByte(data[cursor]) {
-			cursor++
-		}
-		if cursor == nameStart && cursor < len(data) && strings.ContainsRune("@*#?$!-0123456789", rune(data[cursor])) {
-			cursor++
-		}
-		if cursor > nameStart {
-			result = append(result, parameterReference{name: string(data[nameStart:cursor]), start: item.start + index, end: item.start + cursor})
-		}
-		if braced {
-			for cursor < len(data) && data[cursor] != '}' {
+			cursor := index + 1
+			if part.text[cursor] == '{' {
 				cursor++
 			}
+			nameStart := cursor
+			for cursor < len(part.text) && isNameByte(part.text[cursor]) {
+				cursor++
+			}
+			if cursor == nameStart && cursor < len(part.text) && strings.ContainsRune("@*#?$!-0123456789", rune(part.text[cursor])) {
+				cursor++
+			}
+			if cursor > nameStart {
+				result = append(result, parameterReference{
+					name:  string(part.text[nameStart:cursor]),
+					start: part.span.Start.Offset + index,
+					end:   part.span.Start.Offset + cursor,
+				})
+			}
+			index = cursor
 		}
-		index = cursor
 	}
 	return result
 }
 
-func unquotedExpansionSpans(source *sourceFile, item token) []Span {
+func unquotedExpansionSpans(item Word) []Span {
 	var result []Span
 	for _, part := range item.parts {
-		if part.quote == QuoteUnquoted && (part.kind == WordParameterExpansion || part.kind == WordCommandSubstitution) {
+		if part.quote == QuoteUnquoted &&
+			(part.kind == WordParameterExpansion || part.kind == WordCommandSubstitution) &&
+			string(part.text) != "$@" {
 			result = append(result, part.span)
 		}
-	}
-	if len(result) != 0 {
-		return result
-	}
-	data := source.data[item.start:item.end]
-	quote := byte(0)
-	for index := 0; index < len(data); index++ {
-		if quote != 0 {
-			if data[index] == quote {
-				quote = 0
-			} else if data[index] == '\\' && quote == '"' {
-				index++
-			}
-			continue
-		}
-		if data[index] == '\'' || data[index] == '"' {
-			quote = data[index]
-			continue
-		}
-		if data[index] != '$' || index+1 >= len(data) {
-			continue
-		}
-		end := index + 1
-		if data[end] == '{' {
-			for end < len(data) && data[end] != '}' {
-				end++
-			}
-			if end < len(data) {
-				end++
-			}
-		} else {
-			for end < len(data) && (isNameByte(data[end]) || strings.ContainsRune("@*#?$!-", rune(data[end]))) {
-				end++
-			}
-		}
-		result = append(result, source.span(item.start+index, item.start+end))
-		index = end - 1
 	}
 	return result
 }
@@ -482,28 +489,40 @@ type controlPass struct{}
 func (controlPass) ID() passID         { return passControl }
 func (controlPass) Requires() []passID { return []passID{passSymbols} }
 func (controlPass) Run(analysis *analysisContext) error {
-	loopDepth, functionDepth := 0, 0
-	for _, command := range analysis.commands {
-		switch command.name {
-		case "for", "while", "until", "select":
-			loopDepth++
-		case "done":
-			if loopDepth > 0 {
-				loopDepth--
-			}
-		case "function":
-			functionDepth++
+	for _, node := range analysis.file.nodes {
+		analysis.checkControlNode(node, 0, 0)
+	}
+	return nil
+}
+
+func (analysis *analysisContext) checkControlNode(node Node, loopDepth, functionDepth int) {
+	if node.incomplete {
+		return
+	}
+	switch node.kind {
+	case NodeFor, NodeWhile, NodeUntil:
+		loopDepth++
+	case NodeFunction:
+		functionDepth++
+	case NodeCommand, NodeAssignment:
+		view := commandViewFromNode(node)
+		if !view.hasName || !view.nameKnown {
+			break
+		}
+		switch view.name {
 		case "break", "continue":
 			if loopDepth == 0 {
-				analysis.add("control", analysis.source.diagnostic("SHC1001", SeverityError, ConfidenceDefinite, command.name+" is only valid inside a loop", command.nameToken.start, command.nameToken.end))
+				analysis.add("control", analysis.source.diagnostic("SHC1001", SeverityError, ConfidenceDefinite, view.name+" is only valid inside a loop", view.nameWord.span.Start.Offset, view.nameWord.span.End.Offset))
 			}
 		case "return":
 			if functionDepth == 0 && analysis.state.depth == 0 {
-				analysis.add("control", analysis.source.diagnostic("SHC1002", SeverityError, ConfidenceDefinite, "return is only valid in a function or sourced file", command.nameToken.start, command.nameToken.end))
+				analysis.add("control", analysis.source.diagnostic("SHC1002", SeverityError, ConfidenceDefinite, "return is only valid in a function or sourced file", view.nameWord.span.Start.Offset, view.nameWord.span.End.Offset))
 			}
 		}
 	}
-	return nil
+	for _, child := range node.children {
+		analysis.checkControlNode(child, loopDepth, functionDepth)
+	}
 }
 
 type redirectionPass struct{}
@@ -511,32 +530,113 @@ type redirectionPass struct{}
 func (redirectionPass) ID() passID         { return passRedirection }
 func (redirectionPass) Requires() []passID { return []passID{passSymbols} }
 func (redirectionPass) Run(analysis *analysisContext) error {
-	for _, command := range analysis.commands {
-		raw := string(analysis.file.source[command.start:command.end])
-		if misplaced := strings.Index(raw, "2>&1"); misplaced >= 0 {
-			if output := strings.Index(raw[misplaced+4:], ">"); output >= 0 {
-				start := command.start + misplaced
-				analysis.add("redirection", analysis.source.diagnostic("SHR1001", SeverityWarning, ConfidenceLikely, "standard error is duplicated before standard output is redirected", start, start+4))
+	walkCommandNodes(analysis.file.nodes, func(command Node) {
+		var stderrToStdout *Redirection
+		inputs := make(map[string]struct{})
+		for index := range command.redirections {
+			redirect := &command.redirections[index]
+			target, literal := staticWordValue(redirect.target)
+			fd, explicit := redirect.ioNumber, redirect.hasIONumber
+			if !explicit {
+				if strings.HasPrefix(redirect.operator, "<") {
+					fd = 0
+				} else {
+					fd = 1
+				}
+			}
+			if redirect.operator == ">&" && fd == 2 && literal && target == "1" {
+				stderrToStdout = redirect
+				continue
+			}
+			if fd == 1 && stderrToStdout != nil && (redirect.operator == ">" || redirect.operator == ">|" || redirect.operator == ">>") {
+				span := stderrToStdout.span
+				analysis.add("redirection", analysis.source.diagnostic("SHR1001", SeverityWarning, ConfidenceLikely, "standard error is duplicated before standard output is redirected", span.Start.Offset, span.End.Offset))
+				stderrToStdout = nil
+			}
+			if !literal || target == "" {
+				continue
+			}
+			if fd == 0 && redirect.operator == "<" {
+				inputs[target] = struct{}{}
+			}
+			if fd == 1 && (redirect.operator == ">" || redirect.operator == ">|") {
+				if _, same := inputs[target]; same {
+					span := redirect.target.span
+					analysis.add("redirection", analysis.source.diagnostic("SHR1002", SeverityError, ConfidenceDefinite, "input file is also opened for truncating output", span.Start.Offset, span.End.Offset))
+				}
 			}
 		}
-		input, output := literalRedirectPath(raw, "<"), literalRedirectPath(raw, ">")
-		if input != "" && input == output {
-			start := command.start + strings.LastIndex(raw, output)
-			analysis.add("redirection", analysis.source.diagnostic("SHR1002", SeverityError, ConfidenceDefinite, "input file is also opened for truncating output", start, start+len(output)))
-		}
-	}
+	})
 	return nil
 }
 
-var redirectPathPattern = regexp.MustCompile(`(?:^|[[:space:]])([<>])([[:space:]]*)([^[:space:];&|]+)`)
+func walkCommandNodes(nodes []Node, visit func(Node)) {
+	for _, node := range nodes {
+		if node.incomplete {
+			continue
+		}
+		if node.kind == NodeCommand || node.kind == NodeAssignment {
+			visit(node)
+		}
+		walkCommandNodes(node.children, visit)
+	}
+}
 
-func literalRedirectPath(raw, operator string) string {
-	for _, match := range redirectPathPattern.FindAllStringSubmatch(raw, -1) {
-		if match[1] == operator && !strings.ContainsAny(match[3], "$*?[]") {
-			return strings.Trim(match[3], "'\"")
+func staticWordValue(word Word) (string, bool) {
+	if len(word.parts) == 0 {
+		return "", false
+	}
+	var value strings.Builder
+	for _, part := range word.parts {
+		if part.kind != WordLiteral {
+			return "", false
+		}
+		data := part.text
+		switch part.quote {
+		case QuoteSingle:
+			value.Write(data)
+		case QuoteDouble, QuoteLocale:
+			for index := 0; index < len(data); index++ {
+				if data[index] == '$' || data[index] == '`' {
+					return "", false
+				}
+				if data[index] == '\\' && index+1 < len(data) && strings.ContainsRune("$`\"\\\n", rune(data[index+1])) {
+					index++
+					if data[index] != '\n' {
+						value.WriteByte(data[index])
+					}
+					continue
+				}
+				value.WriteByte(data[index])
+			}
+		case QuoteUnquoted:
+			for index := 0; index < len(data); index++ {
+				if data[index] == '$' || data[index] == '`' {
+					return "", false
+				}
+				if data[index] == '\\' {
+					if index+1 >= len(data) {
+						return "", false
+					}
+					index++
+					if data[index] != '\n' {
+						value.WriteByte(data[index])
+					}
+					continue
+				}
+				value.WriteByte(data[index])
+			}
+		case QuoteANSIC:
+			decoded, ok := decodeANSICLiteral(data)
+			if !ok {
+				return "", false
+			}
+			value.WriteString(decoded)
+		default:
+			return "", false
 		}
 	}
-	return ""
+	return value.String(), true
 }
 
 type commandPass struct{}
@@ -549,35 +649,79 @@ func (commandPass) Run(analysis *analysisContext) error {
 		if !modeled {
 			continue
 		}
-		if model.bracketTerminator && (len(command.arguments) == 0 || command.arguments[len(command.arguments)-1].text != "]") {
-			analysis.add("commands", analysis.source.diagnostic("SHB1001", SeverityError, ConfidenceDefinite, "[ command is missing its closing ] argument", command.nameToken.start, command.end))
+		lastArgument := ""
+		if len(command.arguments) > 0 {
+			lastArgument, _ = staticWordValue(command.arguments[len(command.arguments)-1])
+		}
+		if model.bracketTerminator && lastArgument != "]" {
+			analysis.add("commands", analysis.source.diagnostic("SHB1001", SeverityError, ConfidenceDefinite, "[ command is missing its closing ] argument", command.nameWord.span.Start.Offset, command.end))
 		}
 		if model.formatArgument >= 0 && len(command.arguments) > model.formatArgument {
-			format := constantToken(command.arguments[model.formatArgument])
+			format, _ := staticWordValue(command.arguments[model.formatArgument])
 			if format != "" {
 				needed := countPrintfOperands(format)
 				provided := len(command.arguments) - model.formatArgument - 1
 				if needed > provided && provided > 0 {
 					item := command.arguments[model.formatArgument]
-					analysis.add("commands", analysis.source.diagnostic("SHB1002", SeverityWarning, ConfidenceDefinite, "printf format requires more arguments than the command supplies", item.start, item.end))
+					analysis.add("commands", analysis.source.diagnostic("SHB1002", SeverityWarning, ConfidenceDefinite, "printf format requires more arguments than the command supplies", item.span.Start.Offset, item.span.End.Offset))
 				}
 			}
 		}
-		if command.name == "echo" && analysis.file.dialect == DialectPOSIX && len(command.arguments) > 0 && strings.HasPrefix(command.arguments[0].text, "-") {
-			analysis.add("portability", analysis.source.diagnostic("SHP1001", SeverityWarning, ConfidenceDefinite, "echo option behavior is not portable; use printf for controlled output", command.arguments[0].start, command.arguments[0].end))
+		firstArgument := ""
+		if len(command.arguments) > 0 {
+			firstArgument, _ = staticWordValue(command.arguments[0])
+		}
+		if command.name == "echo" && analysis.file.dialect == DialectPOSIX && strings.HasPrefix(firstArgument, "-") {
+			analysis.add("portability", analysis.source.diagnostic("SHP1001", SeverityWarning, ConfidenceDefinite, "echo option behavior is not portable; use printf for controlled output", command.arguments[0].span.Start.Offset, command.arguments[0].span.End.Offset))
 		}
 		if command.name == "local" && analysis.file.dialect == DialectPOSIX {
-			analysis.add("portability", analysis.source.diagnostic("SHP1002", SeverityWarning, ConfidenceDefinite, "local variable declarations are not specified by POSIX shell", command.nameToken.start, command.nameToken.end))
+			analysis.add("portability", analysis.source.diagnostic("SHP1002", SeverityWarning, ConfidenceDefinite, "local variable declarations are not specified by POSIX shell", command.nameWord.span.Start.Offset, command.nameWord.span.End.Offset))
 		}
 	}
 	return nil
 }
 
-func constantToken(item token) string {
-	if strings.ContainsAny(item.text, "$`") {
-		return ""
+func decodeANSICLiteral(data []byte) (string, bool) {
+	if len(data) < 3 || data[0] != '$' || data[1] != '\'' || data[len(data)-1] != '\'' {
+		return "", false
 	}
-	return strings.Trim(item.text, "'\"")
+	content := data[2 : len(data)-1]
+	var result strings.Builder
+	for index := 0; index < len(content); index++ {
+		if content[index] != '\\' {
+			result.WriteByte(content[index])
+			continue
+		}
+		index++
+		if index >= len(content) {
+			return "", false
+		}
+		switch content[index] {
+		case 'a':
+			result.WriteByte('\a')
+		case 'b':
+			result.WriteByte('\b')
+		case 'e', 'E':
+			result.WriteByte(0x1b)
+		case 'f':
+			result.WriteByte('\f')
+		case 'n':
+			result.WriteByte('\n')
+		case 'r':
+			result.WriteByte('\r')
+		case 't':
+			result.WriteByte('\t')
+		case 'v':
+			result.WriteByte('\v')
+		case '\\', '\'', '"':
+			result.WriteByte(content[index])
+		case '\n':
+			// A backslash-newline pair is removed.
+		default:
+			return "", false
+		}
+	}
+	return result.String(), true
 }
 
 func countPrintfOperands(format string) int {
@@ -601,12 +745,16 @@ func (securityPass) ID() passID         { return passSecurity }
 func (securityPass) Requires() []passID { return []passID{passSymbols, passCommands} }
 func (securityPass) Run(analysis *analysisContext) error {
 	for _, command := range analysis.commands {
+		if command.hasName && !command.nameKnown {
+			analysis.inexact(command.nameWord.span.Start.Offset, command.nameWord.span.End.Offset, "dynamic command name prevents command-specific analysis")
+			continue
+		}
 		switch command.name {
 		case "eval":
 			constant, ok := constantArguments(command.arguments)
 			if !ok {
-				analysis.add("security", analysis.source.diagnostic("SHX1001", SeverityWarning, ConfidenceLikely, "dynamic text is evaluated as shell code", command.nameToken.start, command.end))
-				analysis.inexact(command.nameToken.start, command.end, "dynamic eval content prevents exact analysis")
+				analysis.add("security", analysis.source.diagnostic("SHX1001", SeverityWarning, ConfidenceLikely, "dynamic text is evaluated as shell code", command.nameWord.span.Start.Offset, command.end))
+				analysis.inexact(command.nameWord.span.Start.Offset, command.end, "dynamic eval content prevents exact analysis")
 				continue
 			}
 			if err := analyzeNestedLiteral(analysis, command, "<eval>", []byte(constant)); err != nil {
@@ -616,24 +764,30 @@ func (securityPass) Run(analysis *analysisContext) error {
 			if len(command.arguments) == 0 {
 				continue
 			}
-			requested := constantToken(command.arguments[0])
-			if requested == "" {
-				analysis.inexact(command.arguments[0].start, command.arguments[0].end, "dynamic source path prevents exact analysis")
+			requested, known := staticWordValue(command.arguments[0])
+			if !known || requested == "" {
+				analysis.inexact(command.arguments[0].span.Start.Offset, command.arguments[0].span.End.Offset, "dynamic source path prevents exact analysis")
 				continue
 			}
-			if analysis.options.AnalyzeSourced {
-				resolved, data, err := analysis.options.Resolver.Resolve(analysis.ctx, analysis.file.filename, requested)
-				if err != nil {
-					return fmt.Errorf("shellvalidate: resolve %s from %s: %w", requested, analysis.file.filename, err)
-				}
-				if err := analyzeNestedLiteral(analysis, command, resolved, data); err != nil {
-					return err
-				}
+			if !analysis.options.AnalyzeSourced {
+				analysis.inexact(command.arguments[0].span.Start.Offset, command.arguments[0].span.End.Offset, "sourced file was not resolved for analysis")
+				continue
+			}
+			resolved, data, err := analysis.options.Resolver.Resolve(analysis.ctx, analysis.file.filename, requested)
+			if err != nil {
+				return fmt.Errorf("shellvalidate: resolve %s from %s: %w", requested, analysis.file.filename, err)
+			}
+			if err := analyzeNestedLiteral(analysis, command, resolved, data); err != nil {
+				return err
 			}
 		case "rm":
 			for _, argument := range command.arguments {
-				if strings.Contains(argument.text, "$") || argument.text == "/" || argument.text == "/*" {
-					analysis.add("security", analysis.source.diagnostic("SHX1002", SeverityWarning, ConfidenceLikely, "destructive path may become empty or root-like", argument.start, argument.end))
+				value, known := staticWordValue(argument)
+				if !known || value == "/" || value == "/*" {
+					analysis.add("security", analysis.source.diagnostic("SHX1002", SeverityWarning, ConfidenceLikely, "destructive path may become empty or root-like", argument.span.Start.Offset, argument.span.End.Offset))
+					if !known {
+						analysis.inexact(argument.span.Start.Offset, argument.span.End.Offset, "dynamic destructive path prevents exact safety analysis")
+					}
 				}
 			}
 		}
@@ -641,11 +795,11 @@ func (securityPass) Run(analysis *analysisContext) error {
 	return nil
 }
 
-func constantArguments(arguments []token) (string, bool) {
+func constantArguments(arguments []Word) (string, bool) {
 	var parts []string
 	for _, item := range arguments {
-		value := constantToken(item)
-		if value == "" && item.text != "''" && item.text != "\"\"" {
+		value, ok := staticWordValue(item)
+		if !ok {
 			return "", false
 		}
 		parts = append(parts, value)
@@ -658,9 +812,9 @@ func analyzeNestedLiteral(analysis *analysisContext, command commandView, filena
 		analysis.inexact(command.start, command.end, "recursive shell analysis reached its safety limit")
 		return nil
 	}
-	key := filename
-	if filename != "<eval>" {
-		key = filepath.Clean(filename)
+	key := "source:" + normalizeSourceIdentity(filename)
+	if filename == "<eval>" {
+		key = fmt.Sprintf("%s/eval:%d:%d", analysis.state.unitID, command.start, command.end)
 	}
 	if _, exists := analysis.state.visited[key]; exists {
 		analysis.inexact(command.start, command.end, "sourced-file cycle prevents repeated analysis")
@@ -672,7 +826,7 @@ func analyzeNestedLiteral(analysis *analysisContext, command commandView, filena
 	if err != nil {
 		return err
 	}
-	nestedState := &analysisState{depth: analysis.state.depth + 1, visited: analysis.state.visited}
+	nestedState := &analysisState{depth: analysis.state.depth + 1, visited: analysis.state.visited, unitID: key}
 	nestedDiagnostics, exact, err := runAnalysis(analysis.ctx, file, analysis.options, nestedState)
 	if err != nil {
 		return err
@@ -711,12 +865,4 @@ func categoryForCode(code string) string {
 	default:
 		return "incomplete"
 	}
-}
-
-func parseStaticDepth(argument token) int {
-	value, err := strconv.Atoi(argument.text)
-	if err != nil {
-		return 0
-	}
-	return value
 }

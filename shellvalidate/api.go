@@ -137,6 +137,15 @@ func Parse(filename string, source []byte, dialect Dialect) (*File, []Diagnostic
 	}
 	tokens, comments, lexicalDiagnostics := lex(sourceModel, effectiveDialect)
 	nodes, parseDiagnostics := parseTokens(sourceModel, tokens, effectiveDialect)
+	for previous := []Span(nil); ; {
+		ranges := hereDocumentRanges(nodes, sourceModel)
+		if len(ranges) == 0 || equalSpans(ranges, previous) {
+			break
+		}
+		previous = ranges
+		tokens, comments, lexicalDiagnostics = lexSkippingHereDocuments(sourceModel, effectiveDialect, ranges)
+		nodes, parseDiagnostics = parseTokens(sourceModel, tokens, effectiveDialect)
+	}
 	diagnostics := append(append([]Diagnostic(nil), lexicalDiagnostics...), parseDiagnostics...)
 	diagnostics = append(diagnostics, bashOnlyDiagnostics(sourceModel, tokens, effectiveDialect)...)
 	sortDiagnostics(diagnostics)
@@ -149,6 +158,44 @@ func Parse(filename string, source []byte, dialect Dialect) (*File, []Diagnostic
 	}
 	file := &File{filename: filename, source: sourceModel.data, dialect: effectiveDialect, interpreter: interpreter, nodes: nodes, comments: comments, tokens: cloneTokens(tokens), syntaxValid: syntaxValid}
 	return file, diagnostics, nil
+}
+
+func hereDocumentRanges(nodes []Node, source *sourceFile) []Span {
+	var result []Span
+	var walk func([]Node)
+	walk = func(items []Node) {
+		for _, node := range items {
+			for _, redirection := range node.redirections {
+				if redirection.hereDocument == nil {
+					continue
+				}
+				document := redirection.hereDocument
+				end := document.terminatorSpan.End.Offset
+				if end == 0 {
+					end = len(source.data)
+				} else if end < len(source.data) && source.data[end] == '\n' {
+					end++
+				}
+				result = append(result, Span{Start: document.bodySpan.Start, End: source.position(end)})
+			}
+			walk(node.children)
+		}
+	}
+	walk(nodes)
+	sort.Slice(result, func(i, j int) bool { return result[i].Start.Offset < result[j].Start.Offset })
+	return result
+}
+
+func equalSpans(left, right []Span) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 // Analyze performs semantic and static analysis over a parsed file.

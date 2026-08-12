@@ -1,7 +1,7 @@
 # Shell Validation Package
 
-The public `dzcli/shellvalidate` Go package parses and statically analyzes
-POSIX.1-2024 shell and Bash 5.3 source without executing it. This package is a
+The public `dzcli/shellvalidate` Go package targets POSIX.1-2024 shell and Bash
+5.3 source without executing it. This package is a
 library surface for a possible future consumer; no `dzcli` command imports or
 invokes it in this change.
 
@@ -16,6 +16,11 @@ builtin and command semantics, portability, destructive paths, dynamic
 evaluation, and sourced files supplied through a caller-owned resolver.
 Dynamic behavior is represented by `AnalysisExact=false` and an informational
 diagnostic when it materially limits the result.
+
+Support is defined by the checked-in feature, rule, and deterministic-test
+catalogs. The package does not claim to model every runtime effect of arbitrary
+commands, aliases, dynamically generated code, or extensions outside those
+catalogs. Syntax recovery excludes incomplete subtrees from semantic analysis.
 
 Production code uses only the Go standard library. It does not spawn a shell,
 load native code, access the network, traverse the filesystem, or read sourced

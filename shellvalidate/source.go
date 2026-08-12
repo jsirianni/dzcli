@@ -42,3 +42,7 @@ func (source *sourceFile) span(start, end int) Span {
 func (source *sourceFile) diagnostic(code string, severity Severity, confidence Confidence, message string, start, end int) Diagnostic {
 	return Diagnostic{Code: code, Severity: severity, Confidence: confidence, Message: message, Primary: source.span(start, end)}
 }
+
+// normalizeSourceIdentity deliberately performs no normalization. The
+// resolver-returned filename is the caller's canonical, opaque identity.
+func normalizeSourceIdentity(identity string) string { return identity }

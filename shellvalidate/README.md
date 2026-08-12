@@ -1,7 +1,7 @@
 # shellvalidate
 
-`shellvalidate` is a pure-Go, importable parser and static analyzer for the
-POSIX.1-2024 Shell Command Language and Bash 5.3. It never executes source,
+`shellvalidate` is a pure-Go, importable parser and static analyzer targeting
+the POSIX.1-2024 Shell Command Language and Bash 5.3. It never executes source,
 spawns a shell, or reads sourced files unless a caller explicitly supplies a
 `SourceResolver` and enables sourced-file analysis.
 
@@ -24,6 +24,12 @@ Static analysis is conservative. Dynamic evaluation, dynamic source paths,
 unknown command substitutions, runtime-generated names, aliases, and unknown
 external behavior can make `Result.AnalysisExact` false. The package reports
 that uncertainty instead of claiming a complete analysis.
+
+The parser preserves command, pipeline, compound-command, expression,
+redirection, and here-document structure. The analyzer implements the
+diagnostic families listed in `COVERAGE.md`; it is not a proof that every
+runtime shell behavior is known. Incomplete recovered subtrees are excluded
+from semantic passes and make the analysis inexact.
 
 The implementation accepts at most 8 MiB per source, 256 levels of syntactic
 nesting, and 16 recursive literal `eval` or sourced-file analyses.
