@@ -12,12 +12,35 @@ import (
 	"testing"
 )
 
-const deterministicModelVersion = "shellvalidate-generated-v1"
+const deterministicModelVersion = "shellvalidate-generated-v2"
 
 type deterministicVector struct {
-	ID      string  `json:"id"`
-	Dialect Dialect `json:"dialect"`
-	Source  string  `json:"source"`
+	ID       string                    `json:"id"`
+	Dialect  Dialect                   `json:"dialect"`
+	Source   string                    `json:"source"`
+	Expected *deterministicExpectation `json:"expected,omitempty"`
+}
+
+// deterministicExpectation is a test-owned conformance oracle. The values in
+// these records are authored from the language specifications; they are never
+// copied from lexer or parser tables.
+type deterministicExpectation struct {
+	SyntaxValid bool     `json:"syntaxValid"`
+	Tokens      []string `json:"tokens"`
+	AST         string   `json:"ast"`
+	Diagnostics []string `json:"diagnostics"`
+}
+
+func validVector(id string, dialect Dialect, source string, tokens []string, ast string) deterministicVector {
+	return deterministicVector{ID: id, Dialect: dialect, Source: source, Expected: &deterministicExpectation{
+		SyntaxValid: true, Tokens: tokens, AST: ast, Diagnostics: []string{},
+	}}
+}
+
+func invalidVector(id string, dialect Dialect, source string, tokens []string, ast string, diagnostics ...string) deterministicVector {
+	return deterministicVector{ID: id, Dialect: dialect, Source: source, Expected: &deterministicExpectation{
+		SyntaxValid: false, Tokens: tokens, AST: ast, Diagnostics: append([]string(nil), diagnostics...),
+	}}
 }
 
 func modelFingerprint(vectors []deterministicVector) string {
@@ -34,12 +57,22 @@ func modelFingerprint(vectors []deterministicVector) string {
 }
 
 type generatedModelManifest struct {
-	ModelVersion string `json:"modelVersion"`
-	Models       []struct {
-		ID     string         `json:"id"`
-		Count  int            `json:"count"`
-		SHA256 string         `json:"sha256"`
-		Bounds map[string]int `json:"bounds,omitempty"`
+	SchemaVersion   int    `json:"schemaVersion"`
+	ModelVersion    string `json:"modelVersion"`
+	NormativeDigest string `json:"normativeDigest"`
+	ChangeNote      string `json:"changeNote"`
+	Models          []struct {
+		ID          string         `json:"id"`
+		Count       int            `json:"count"`
+		SHA256      string         `json:"sha256"`
+		Obligations int            `json:"obligations"`
+		Executed    int            `json:"executed"`
+		Strength    string         `json:"strength"`
+		Bounds      map[string]int `json:"bounds,omitempty"`
+		Exclusions  []struct {
+			Reason string `json:"reason"`
+			Count  int    `json:"count"`
+		} `json:"exclusions,omitempty"`
 	} `json:"models"`
 }
 
@@ -66,7 +99,7 @@ func expectedGeneratedModel(t *testing.T, name string) (int, string) {
 
 }
 
-func TestGeneratedModelManifest(t *testing.T) {
+func TestGeneratedModel_Manifest(t *testing.T) {
 	data, err := os.ReadFile("testdata/spec/generated_models.json")
 	if err != nil {
 		t.Fatal(err)
@@ -78,6 +111,13 @@ func TestGeneratedModelManifest(t *testing.T) {
 	if manifest.ModelVersion != deterministicModelVersion {
 		t.Fatalf("model version = %q", manifest.ModelVersion)
 	}
+	if manifest.SchemaVersion != 2 || manifest.ChangeNote == "" {
+		t.Fatalf("manifest schema=%d change-note=%q", manifest.SchemaVersion, manifest.ChangeNote)
+	}
+	digest, err := hex.DecodeString(manifest.NormativeDigest)
+	if err != nil || len(digest) != sha256.Size {
+		t.Fatalf("invalid normative digest %q", manifest.NormativeDigest)
+	}
 	previous, total := "", 0
 	for _, model := range manifest.Models {
 		if model.ID <= previous {
@@ -86,6 +126,14 @@ func TestGeneratedModelManifest(t *testing.T) {
 		if model.Count <= 0 {
 			t.Fatalf("model %s count = %d", model.ID, model.Count)
 		}
+		if model.Obligations <= 0 || model.Executed != model.Count || model.Strength == "" {
+			t.Fatalf("model %s obligations=%d executed=%d count=%d strength=%q", model.ID, model.Obligations, model.Executed, model.Count, model.Strength)
+		}
+		for _, exclusion := range model.Exclusions {
+			if exclusion.Reason == "" || exclusion.Count <= 0 {
+				t.Fatalf("model %s invalid exclusion %#v", model.ID, exclusion)
+			}
+		}
 		digest, err := hex.DecodeString(model.SHA256)
 		if err != nil || len(digest) != sha256.Size {
 			t.Fatalf("model %s has invalid SHA-256 %q", model.ID, model.SHA256)
@@ -93,7 +141,7 @@ func TestGeneratedModelManifest(t *testing.T) {
 		previous = model.ID
 		total += model.Count
 	}
-	if len(manifest.Models) != 9 || total != 285 {
+	if len(manifest.Models) != 9 || total <= 0 {
 		t.Fatalf("manifest models=%d vectors=%d", len(manifest.Models), total)
 	}
 }
@@ -117,11 +165,186 @@ func verifyParseVector(t *testing.T, vector deterministicVector) {
 		t.Fatal("nondeterministic AST")
 	}
 	assertDiagnosticBounds(t, []byte(vector.Source), firstDiagnostics)
+	if vector.Expected == nil {
+		return
+	}
+	if firstFile == nil {
+		t.Fatal("parse returned a nil file")
+	}
+	if firstFile.syntaxValid != vector.Expected.SyntaxValid {
+		t.Fatalf("syntax valid=%v want=%v", firstFile.syntaxValid, vector.Expected.SyntaxValid)
+	}
+	if got := normalizedTokens(firstFile.tokens); !reflect.DeepEqual(got, vector.Expected.Tokens) {
+		t.Fatalf("tokens:\n got %#v\nwant %#v", got, vector.Expected.Tokens)
+	}
+	if got := normalizedAST(firstFile.nodes); got != vector.Expected.AST {
+		t.Fatalf("AST:\n got %s\nwant %s", got, vector.Expected.AST)
+	}
+	if got := normalizedDiagnostics(firstDiagnostics); !reflect.DeepEqual(got, vector.Expected.Diagnostics) {
+		t.Fatalf("diagnostics:\n got %#v\nwant %#v", got, vector.Expected.Diagnostics)
+	}
+	result, err := Check(t.Context(), vector.ID, []byte(vector.Source), Options{Dialect: vector.Dialect})
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	if result.SyntaxValid != vector.Expected.SyntaxValid {
+		t.Fatalf("Check syntax valid=%v want=%v", result.SyntaxValid, vector.Expected.SyntaxValid)
+	}
 }
 
-func TestOperatorExhaustiveModel(t *testing.T) {
-	operators := append([]string(nil), shellOperators...)
-	sort.Strings(operators)
+func normalizedTokens(tokens []token) []string {
+	result := make([]string, 0, len(tokens))
+	for _, item := range tokens {
+		result = append(result, fmt.Sprintf("%d:%s@%d:%d", item.kind, item.text, item.start, item.end))
+	}
+	return result
+}
+
+func normalizedDiagnostics(diagnostics []Diagnostic) []string {
+	result := make([]string, len(diagnostics))
+	for index, diagnostic := range diagnostics {
+		result[index] = fmt.Sprintf("%s@%d:%d:%s", diagnostic.Code, diagnostic.Primary.Start.Offset, diagnostic.Primary.End.Offset, diagnostic.Message)
+	}
+	return result
+}
+
+func normalizedAST(nodes []Node) string {
+	var result strings.Builder
+	for index, node := range nodes {
+		if index != 0 {
+			result.WriteByte(';')
+		}
+		normalizeNode(&result, node)
+	}
+	return result.String()
+}
+
+func normalizeNode(result *strings.Builder, node Node) {
+	fmt.Fprintf(result, "%s[%s]", node.kind, node.role)
+	if node.operator != "" {
+		fmt.Fprintf(result, "<%s>", node.operator)
+	}
+	if node.incomplete {
+		result.WriteString("!")
+	}
+	result.WriteByte('{')
+	for index, word := range node.words {
+		if index != 0 {
+			result.WriteByte(',')
+		}
+		result.WriteString(wordSignature(word))
+	}
+	for _, redirection := range node.redirections {
+		io := ""
+		if redirection.hasIONumber {
+			io = fmt.Sprint(redirection.ioNumber)
+		}
+		fmt.Fprintf(result, ";r=%s%s:%s", io, redirection.operator, wordSignature(redirection.target))
+		if redirection.hereDocument != nil {
+			fmt.Fprintf(result, ":h(q=%v,t=%v,b=%q)", redirection.hereDocument.quoted, redirection.hereDocument.stripTabs, redirection.hereDocument.body)
+		}
+	}
+	for _, expression := range node.expressions {
+		result.WriteString(";e=")
+		normalizeExpression(result, expression)
+	}
+	result.WriteByte('}')
+	if len(node.children) != 0 {
+		result.WriteByte('(')
+		for index, child := range node.children {
+			if index != 0 {
+				result.WriteByte(',')
+			}
+			normalizeNode(result, child)
+		}
+		result.WriteByte(')')
+	}
+}
+
+func normalizeExpression(result *strings.Builder, expression Expression) {
+	fmt.Fprintf(result, "%d:%s:%s", expression.kind, expression.operator, expression.value)
+	if len(expression.children) != 0 {
+		result.WriteByte('(')
+		for index, child := range expression.children {
+			if index != 0 {
+				result.WriteByte(',')
+			}
+			normalizeExpression(result, child)
+		}
+		result.WriteByte(')')
+	}
+}
+
+func wordSignature(word Word) string {
+	var result strings.Builder
+	for _, part := range word.parts {
+		fmt.Fprintf(&result, "%d/%d:%s", part.kind, part.quote, part.text)
+	}
+	return result.String()
+}
+
+func simpleCommandAST(words ...string) string {
+	return "command[]{" + strings.Join(words, ",") + "}"
+}
+
+func simpleTokens(source string, items ...string) []string {
+	result := make([]string, 0, len(items)+2)
+	search := 0
+	for _, item := range items {
+		index := strings.Index(source[search:], item)
+		if index < 0 {
+			panic("test token is absent from source: " + item)
+		}
+		start := search + index
+		kind := tokenWord
+		if item == "\n" {
+			kind = tokenNewline
+		}
+		if strings.Contains(" && || | |& ; & ;; ;& ;;& < > >> << <<- <<< <& >& <> >| &> &>> ", " "+item+" ") {
+			kind = tokenOperator
+		}
+		result = append(result, fmt.Sprintf("%d:%s@%d:%d", kind, item, start, start+len(item)))
+		search = start + len(item)
+	}
+	if strings.HasSuffix(source, "\n") {
+		result = append(result, fmt.Sprintf("%d:\n@%d:%d", tokenNewline, len(source)-1, len(source)))
+	}
+	result = append(result, fmt.Sprintf("%d:@%d:%d", tokenEOF, len(source), len(source)))
+	return result
+}
+
+func expectedTokenKind(text string, dialect Dialect) tokenKind {
+	posix := map[string]bool{"&&": true, "||": true, "|": true, "&": true, ";": true, ";;": true, "(": true, ")": true, "{": true, "}": true, "<": true, ">": true, ">>": true, "<<": true, "<<-": true, "<&": true, ">&": true, "<>": true, ">|": true}
+	bash := map[string]bool{"&>>": true, ";;&": true, "<<<": true, "((": true, "))": true, "[[": true, "]]": true, "|&": true, ";&": true, "&>": true}
+	if posix[text] || dialect == DialectBash && bash[text] {
+		return tokenOperator
+	}
+	return tokenWord
+}
+
+func arithmeticExpectedTokens(source, operator string) []string {
+	operatorStart := len("((left ")
+	result := []string{"2:((@0:2", "1:left@2:6"}
+	pieces := []string{operator}
+	if strings.HasSuffix(operator, "=") {
+		prefix := strings.TrimSuffix(operator, "=")
+		if expectedTokenKind(prefix, DialectBash) == tokenOperator {
+			pieces = []string{prefix, "="}
+		}
+	}
+	offset := operatorStart
+	for _, piece := range pieces {
+		result = append(result, fmt.Sprintf("%d:%s@%d:%d", expectedTokenKind(piece, DialectBash), piece, offset, offset+len(piece)))
+		offset += len(piece)
+	}
+	rightStart := operatorStart + len(operator) + 1
+	closeStart := rightStart + len("right")
+	return append(result, fmt.Sprintf("1:right@%d:%d", rightStart, rightStart+5), fmt.Sprintf("2:))@%d:%d", closeStart, closeStart+2), fmt.Sprintf("3:\n@%d:%d", len(source)-1, len(source)), fmt.Sprintf("5:@%d:%d", len(source), len(source)))
+}
+
+func TestGeneratedModel_Operators(t *testing.T) {
+	// Normative lexical inventory. This must remain independent of shellOperators.
+	operators := []string{"&", "&&", "&>", "&>>", "(", "((", ")", "))", ";", ";&", ";;&", ";;", "<", "<&", "<<", "<<-", "<<<", "<>", ">", ">&", ">>", ">|", "[[", "]]", "{", "|", "|&", "||", "}"}
 	var vectors []deterministicVector
 	for _, dialect := range []Dialect{DialectPOSIX, DialectBash} {
 		for _, operator := range operators {
@@ -144,7 +367,7 @@ func TestOperatorExhaustiveModel(t *testing.T) {
 	assertModelFingerprint(t, "operators", vectors)
 }
 
-func TestLexicalBoundedModel(t *testing.T) {
+func TestGeneratedModel_Lexical(t *testing.T) {
 	t.Run("backslash", func(t *testing.T) {
 		for _, source := range []string{"echo a\\ b\n", "echo a\\\nb\n", "echo \\#not-comment\n"} {
 			verifyParseVector(t, deterministicVector{ID: "backslash", Dialect: DialectPOSIX, Source: source})
@@ -195,7 +418,7 @@ func TestLexicalBoundedModel(t *testing.T) {
 	})
 }
 
-func TestDelimiterDeletionModel(t *testing.T) {
+func TestGeneratedModel_DelimiterDeletion(t *testing.T) {
 	vectors := []deterministicVector{
 		{ID: "single-quote", Dialect: DialectPOSIX, Source: "echo 'x"},
 		{ID: "double-quote", Dialect: DialectPOSIX, Source: "echo \"x"},
@@ -223,7 +446,7 @@ func TestDelimiterDeletionModel(t *testing.T) {
 	assertModelFingerprint(t, "delimiter-deletion", vectors)
 }
 
-func TestSeparatorExhaustiveModel(t *testing.T) {
+func TestGeneratedModel_Separators(t *testing.T) {
 	separators := []string{"\n", ";", "&", "&&", "||", "|", "|&", ";;", ";&", ";;&"}
 	var vectors []deterministicVector
 	for _, separator := range separators {
@@ -231,14 +454,30 @@ func TestSeparatorExhaustiveModel(t *testing.T) {
 		if separator == "|&" || separator == ";&" || separator == ";;&" {
 			dialect = DialectBash
 		}
-		vector := deterministicVector{ID: "separator/" + fmt.Sprintf("%x", separator), Dialect: dialect, Source: "left" + separator + "right\n"}
+		source := "left" + separator + "right\n"
+		tokens := simpleTokens(source, "left", separator, "right")
+		ast := "command[]{0/0:left};command[]{0/0:right}"
+		var vector deterministicVector
+		switch separator {
+		case "&&", "||":
+			ast = fmt.Sprintf("list[]<%s>{}(command[list-element]{0/0:left},command[list-element]{0/0:right})", separator)
+			vector = validVector("separator/"+fmt.Sprintf("%x", separator), dialect, source, tokens, ast)
+		case "|", "|&":
+			ast = fmt.Sprintf("pipeline[]<%s>{}(command[pipeline-command]{0/0:left},command[pipeline-command]{0/0:right})", separator)
+			vector = validVector("separator/"+fmt.Sprintf("%x", separator), dialect, source, tokens, ast)
+		case ";;", ";&", ";;&":
+			vector = invalidVector("separator/"+fmt.Sprintf("%x", separator), dialect, source, tokens, ast,
+				fmt.Sprintf("SHS1005@4:%d:case-clause terminator is only valid inside case", 4+len(separator)))
+		default:
+			vector = validVector("separator/"+fmt.Sprintf("%x", separator), dialect, source, tokens, ast)
+		}
 		vectors = append(vectors, vector)
 		verifyParseVector(t, vector)
 	}
 	assertModelFingerprint(t, "separators", vectors)
 }
 
-func TestRedirectionExhaustiveModel(t *testing.T) {
+func TestGeneratedModel_Redirections(t *testing.T) {
 	operators := []string{"<", ">", ">>", "<<", "<<-", "<<<", "<&", ">&", "<>", ">|", "&>", "&>>"}
 	var vectors []deterministicVector
 	for _, operator := range operators {
@@ -260,7 +499,7 @@ func TestRedirectionExhaustiveModel(t *testing.T) {
 	assertModelFingerprint(t, "redirections", vectors)
 }
 
-func TestHereDocumentExhaustiveModel(t *testing.T) {
+func TestGeneratedModel_HereDocuments(t *testing.T) {
 	delimiters := []string{"END", "'END'", "\"END\""}
 	strips := []bool{false, true}
 	var vectors []deterministicVector
@@ -282,27 +521,20 @@ func TestHereDocumentExhaustiveModel(t *testing.T) {
 	assertModelFingerprint(t, "heredocs", vectors)
 }
 
-func TestArithmeticExhaustiveModel(t *testing.T) {
-	operators := make([]string, 0, len(arithmeticPrecedence))
-	for operator := range arithmeticPrecedence {
-		if operator != "?" {
-			operators = append(operators, operator)
-		}
-	}
-	sort.Strings(operators)
+func TestGeneratedModel_Arithmetic(t *testing.T) {
+	// Bash 5.3 shell-arithmetic binary operators. =~ is intentionally absent.
+	operators := []string{"!=", "%", "%=", "&", "&&", "&=", "*", "**", "*=", "+", "+=", ",", "-", "-=", "/", "/=", "<", "<<", "<<=", "<=", "=", "==", ">", ">=", ">>", ">>=", "^", "^=", "|", "|=", "||"}
 	var vectors []deterministicVector
 	for _, operator := range operators {
 		source := "((left " + operator + " right))\n"
-		vector := deterministicVector{ID: "arithmetic/" + operator, Dialect: DialectBash, Source: source}
+		kind := ExpressionBinary
+		if strings.Contains(" = *= /= %= += -= <<= >>= &= ^= |= ", " "+operator+" ") {
+			kind = ExpressionAssignment
+		}
+		ast := fmt.Sprintf("arithmetic[]{;e=%d:%s:(1::left,1::right)}", kind, operator)
+		vector := validVector("arithmetic/"+operator, DialectBash, source, arithmeticExpectedTokens(source, operator), ast)
 		vectors = append(vectors, vector)
-		file, diagnostics, err := Parse(vector.ID, []byte(source), DialectBash)
-		if err != nil || len(diagnostics) != 0 {
-			t.Fatalf("%s: %v %#v", operator, err, diagnostics)
-		}
-		expressions := expressionsForKind(file, NodeArithmetic)
-		if len(expressions) != 1 || expressions[0].Operator() != operator {
-			t.Fatalf("%s expression = %#v", operator, expressions)
-		}
+		verifyParseVector(t, vector)
 	}
 	assertModelFingerprint(t, "arithmetic", vectors)
 
@@ -332,23 +564,36 @@ func assertExpressionAssociation(t *testing.T, source, operator string, right bo
 	}
 }
 
-func TestConditionalExhaustiveModel(t *testing.T) {
-	operators := []string{"==", "!=", "=~", "<", ">", "&&", "||"}
+func TestGeneratedModel_Conditional(t *testing.T) {
+	// Bash conditional-command operators, kept separate from arithmetic.
+	operators := []string{"!=", "-ef", "-eq", "-ge", "-gt", "-le", "-lt", "-ne", "-nt", "-ot", "<", "=", "==", "=~", ">"}
 	var vectors []deterministicVector
 	for _, operator := range operators {
 		source := "[[ left " + operator + " right ]]\n"
-		vector := deterministicVector{ID: "conditional/" + operator, Dialect: DialectBash, Source: source}
+		operatorStart := len("[[ left ")
+		rightStart := operatorStart + len(operator) + 1
+		closeStart := rightStart + len("right ")
+		vector := validVector("conditional/"+operator, DialectBash, source,
+			[]string{"2:[[@0:2", "1:left@3:7", fmt.Sprintf("%d:%s@%d:%d", expectedTokenKind(operator, DialectBash), operator, operatorStart, operatorStart+len(operator)), fmt.Sprintf("1:right@%d:%d", rightStart, rightStart+5), fmt.Sprintf("2:]]@%d:%d", closeStart, closeStart+2), fmt.Sprintf("3:\n@%d:%d", len(source)-1, len(source)), fmt.Sprintf("5:@%d:%d", len(source), len(source))},
+			fmt.Sprintf("conditional[]{;e=3:%s:(1::left,1::right)}", operator))
 		vectors = append(vectors, vector)
-		file, diagnostics, err := Parse(vector.ID, []byte(source), DialectBash)
-		if err != nil || len(diagnostics) != 0 {
-			t.Fatalf("%s: %v %#v", operator, err, diagnostics)
-		}
-		expressions := expressionsForKind(file, NodeConditional)
-		if len(expressions) != 1 || expressions[0].Operator() != operator {
-			t.Fatalf("%s expression = %#v", operator, expressions)
-		}
+		verifyParseVector(t, vector)
 	}
 	assertModelFingerprint(t, "conditional", vectors)
+}
+
+func TestGeneratedModel_ContextRejections(t *testing.T) {
+	vectors := []deterministicVector{
+		invalidVector("context/regex-is-not-arithmetic", DialectBash, "((left =~ right))\n",
+			[]string{"2:((@0:2", "1:left@2:6", "1:=~@7:9", "1:right@10:15", "2:))@15:17", "3:\n@17:18", "5:@18:18"},
+			"arithmetic[]!{;e=1::left;e=1::right}", "SHS1005@7:9:operator is not valid in shell arithmetic"),
+		invalidVector("context/assignment-is-not-conditional", DialectBash, "[[ left += right ]]\n",
+			[]string{"2:[[@0:2", "1:left@3:7", "1:+=@8:10", "1:right@11:16", "2:]]@17:19", "3:\n@19:20", "5:@20:20"},
+			"conditional[]!{;e=1::left}", "SHS1005@8:10:token is not valid in a conditional expression", "SHS1005@11:16:token is not valid in a conditional expression"),
+	}
+	for _, vector := range vectors {
+		t.Run(vector.ID, func(t *testing.T) { verifyParseVector(t, vector) })
+	}
 }
 
 func expressionsForKind(file *File, kind NodeKind) []Expression {
@@ -360,7 +605,7 @@ func expressionsForKind(file *File, kind NodeKind) []Expression {
 	return nil
 }
 
-func TestGrammarHandAuthoredMatrix(t *testing.T) {
+func TestGeneratedModel_Grammar(t *testing.T) {
 	tests := map[string][]string{
 		"complete-command": {"echo ok\n", "if true; then :; fi\n"},
 		"pipeline":         {"left | right\n", "! left | right\n"},
@@ -388,7 +633,7 @@ func TestGrammarHandAuthoredMatrix(t *testing.T) {
 	}
 }
 
-func TestAutoDialectModel(t *testing.T) {
+func TestGeneratedModel_AutoDialect(t *testing.T) {
 	tests := []struct {
 		source string
 		want   Dialect
@@ -406,7 +651,7 @@ func TestAutoDialectModel(t *testing.T) {
 	}
 }
 
-func TestDialectInteractionModel(t *testing.T) {
+func TestGeneratedModel_DialectInteractions(t *testing.T) {
 	features := []struct {
 		name   string
 		source string
@@ -498,75 +743,302 @@ func deterministicPairwise(dimensions [][]string) []interactionVector {
 	return selected
 }
 
-func TestDeterministicPairwiseModel(t *testing.T) {
-	dimensions := [][]string{
-		{"bash", "posix"},
-		{"double", "single", "unquoted"},
-		{"arithmetic", "command", "literal", "parameter"},
-		{"argument", "assignment", "redirection"},
+type pairwiseExclusion struct {
+	Tuple  interactionVector
+	Reason string
+}
+
+var pairwiseDimensions = [][]string{
+	{"bash", "posix"},
+	{"double", "single", "unquoted"},
+	{"arithmetic", "command", "literal", "parameter"},
+	{"argument", "assignment", "redirection"},
+}
+
+func pairwiseConstraint(vector interactionVector) (string, bool) {
+	// Single quotes intentionally suppress expansion. Such a tuple cannot both
+	// preserve single-quote semantics and expose the requested expansion node.
+	if vector[1].Value == "single" && vector[2].Value != "literal" {
+		return "single-quote-suppresses-expansion", false
 	}
-	vectors := deterministicPairwise(dimensions)
-	data, err := json.Marshal(vectors)
-	if err != nil {
-		t.Fatal(err)
-	}
-	hash := sha256.Sum256(data)
-	count, fingerprint := expectedGeneratedModel(t, "pairwise")
-	if len(vectors) != count || hex.EncodeToString(hash[:]) != fingerprint {
-		t.Fatalf("model=%s pairwise-count=%d hash=%x", deterministicModelVersion, len(vectors), hash)
+	return "", true
+}
+
+func constrainedPairwise() ([]interactionVector, []pairwiseExclusion) {
+	var candidates []interactionVector
+	var excluded []pairwiseExclusion
+	for _, vector := range allInteractionVectors(pairwiseDimensions) {
+		if reason, ok := pairwiseConstraint(vector); ok {
+			candidates = append(candidates, vector)
+		} else {
+			excluded = append(excluded, pairwiseExclusion{Tuple: vector, Reason: reason})
+		}
 	}
 	required := make(map[string]struct{})
-	for _, vector := range allInteractionVectors(dimensions) {
-		for _, key := range pairKeys(vector) {
+	for _, candidate := range candidates {
+		for _, key := range pairKeys(candidate) {
 			required[key] = struct{}{}
 		}
 	}
-	for _, vector := range vectors {
-		for _, key := range pairKeys(vector) {
+	remaining := append([]interactionVector(nil), candidates...)
+	var selected []interactionVector
+	for len(required) != 0 {
+		best, score := -1, -1
+		for index, candidate := range remaining {
+			candidateScore := 0
+			for _, key := range pairKeys(candidate) {
+				if _, ok := required[key]; ok {
+					candidateScore++
+				}
+			}
+			if candidateScore > score {
+				best, score = index, candidateScore
+			}
+		}
+		if best < 0 || score == 0 {
+			panic("constrained pairwise generator made no progress")
+		}
+		selected = append(selected, remaining[best])
+		for _, key := range pairKeys(remaining[best]) {
 			delete(required, key)
 		}
+		remaining = append(remaining[:best], remaining[best+1:]...)
 	}
-	if len(required) != 0 {
-		t.Fatalf("uncovered pairwise tuples: %#v", required)
-	}
+	return selected, excluded
 }
 
-func TestBoundedRecursiveModel(t *testing.T) {
-	const (
-		maxCompoundDepth  = 3
-		maxPipelineLength = 3
-		maxWordParts      = 4
-		maxRedirections   = 2
-	)
-	wordParts := []string{"a", "${b}", "$(printf x)", "$((1+2))"}
+func renderPairwise(vector interactionVector) (deterministicVector, WordPartKind, QuoteKind, string) {
+	dialect := DialectBash
+	if vector[0].Value == "posix" {
+		dialect = DialectPOSIX
+	}
+	partText, partKind := "text", WordLiteral
+	switch vector[2].Value {
+	case "arithmetic":
+		partText, partKind = "$((1+2))", WordArithmeticExpansion
+	case "command":
+		partText, partKind = "$(printf x)", WordCommandSubstitution
+	case "parameter":
+		partText, partKind = "${value:-safe}", WordParameterExpansion
+	}
+	quote := QuoteUnquoted
+	switch vector[1].Value {
+	case "double":
+		partText, quote = "\""+partText+"\"", QuoteDouble
+	case "single":
+		partText, quote = "'"+partText+"'", QuoteSingle
+	}
+	contextName := vector[3].Value
+	source := "printf '%s\\n' " + partText + "\n"
+	switch contextName {
+	case "assignment":
+		source = "value=" + partText + "\nprintf '%s\\n' \"$value\"\n"
+	case "redirection":
+		source = ": >" + partText + "\n"
+	}
+	idParts := make([]string, len(vector))
+	for index := range vector {
+		idParts[index] = vector[index].Value
+	}
+	oracle := fmt.Sprintf("context=%s;part=%s;quote=%s", contextName, vector[2].Value, vector[1].Value)
+	return validVector("pairwise/"+strings.Join(idParts, "/"), dialect, source, nil, oracle), partKind, quote, contextName
+}
+
+func diagnosticCodes(items []Diagnostic) []string {
+	result := make([]string, len(items))
+	for index := range items {
+		result[index] = items[index].Code
+	}
+	return result
+}
+
+func wordContainsPart(word Word, kind WordPartKind, quote QuoteKind) bool {
+	for _, part := range word.Parts() {
+		if part.Kind() == kind && part.Quote() == quote {
+			return true
+		}
+	}
+	return false
+}
+
+func nodesDepthFirst(nodes []Node) []Node {
+	var result []Node
+	for _, node := range nodes {
+		result = append(result, node)
+		result = append(result, nodesDepthFirst(node.Children())...)
+	}
+	return result
+}
+
+func assertPairwiseAST(t *testing.T, file *File, kind WordPartKind, quote QuoteKind, contextName string) {
+	t.Helper()
+	for _, node := range nodesDepthFirst(file.Nodes()) {
+		var words []Word
+		switch contextName {
+		case "argument":
+			words = node.Words()
+		case "assignment":
+			words = node.Assignments()
+		case "redirection":
+			for _, redirect := range node.Redirections() {
+				words = append(words, redirect.Target())
+			}
+		}
+		for _, word := range words {
+			if wordContainsPart(word, kind, quote) {
+				return
+			}
+		}
+	}
+	t.Fatalf("AST lacks %s part kind=%d quote=%d", contextName, kind, quote)
+}
+
+func TestGeneratedModel_PairwiseShellInteractions(t *testing.T) {
+	tuples, exclusions := constrainedPairwise()
+	if len(exclusions) != 18 {
+		t.Fatalf("pairwise exclusions=%d, want 18", len(exclusions))
+	}
+	vectors := make([]deterministicVector, 0, len(tuples))
+	for _, tuple := range tuples {
+		vector, partKind, quote, contextName := renderPairwise(tuple)
+		vectors = append(vectors, vector)
+		result, err := Check(t.Context(), vector.ID, []byte(vector.Source), Options{
+			Dialect: vector.Dialect, EnableCategories: []string{"syntax"},
+		})
+		if err != nil {
+			t.Fatalf("%s: %v", vector.ID, err)
+		}
+		if result.SyntaxValid != vector.Expected.SyntaxValid || !reflect.DeepEqual(diagnosticCodes(result.Diagnostics), vector.Expected.Diagnostics) {
+			t.Fatalf("%s: valid=%v diagnostics=%v", vector.ID, result.SyntaxValid, diagnosticCodes(result.Diagnostics))
+		}
+		assertPairwiseAST(t, result.File, partKind, quote, contextName)
+	}
+	assertModelFingerprint(t, "pairwise", vectors)
+}
+
+func appendSequences(alphabet []string, maximum int, visit func([]string)) {
+	var build func([]string)
+	build = func(prefix []string) {
+		if len(prefix) != 0 {
+			visit(append([]string(nil), prefix...))
+		}
+		if len(prefix) == maximum {
+			return
+		}
+		for _, item := range alphabet {
+			build(append(prefix, item))
+		}
+	}
+	build(nil)
+}
+
+func checkBoundedVector(t *testing.T, vector deterministicVector) *File {
+	t.Helper()
+	result, err := Check(t.Context(), vector.ID, []byte(vector.Source), Options{
+		Dialect: vector.Dialect, EnableCategories: []string{"syntax"},
+	})
+	if err != nil || !result.SyntaxValid || len(result.Diagnostics) != 0 {
+		t.Fatalf("%s: valid=%v err=%v diagnostics=%v", vector.ID, result.SyntaxValid, err, diagnosticCodes(result.Diagnostics))
+	}
+	return result.File
+}
+
+func TestGeneratedModel_BoundedLocalGrammar(t *testing.T) {
 	var vectors []deterministicVector
-	for depth := 0; depth <= maxCompoundDepth; depth++ {
-		for pipeline := 1; pipeline <= maxPipelineLength; pipeline++ {
-			for partCount := 1; partCount <= maxWordParts; partCount++ {
-				for redirections := 0; redirections <= maxRedirections; redirections++ {
-					command := "printf '%s\\n' " + strings.Join(wordParts[:partCount], "")
-					commands := make([]string, pipeline)
-					for index := range commands {
-						commands[index] = command
-					}
-					source := strings.Repeat("( ", depth) + strings.Join(commands, " | ")
-					for index := 0; index < redirections; index++ {
-						source += fmt.Sprintf(" %d>out%d", index+3, index)
-					}
-					source += strings.Repeat(" )", depth) + "\n"
-					vector := deterministicVector{
-						ID:      fmt.Sprintf("recursive/d%d/p%d/w%d/r%d", depth, pipeline, partCount, redirections),
-						Dialect: DialectPOSIX,
-						Source:  source,
-					}
-					vectors = append(vectors, vector)
-					file, diagnostics, err := Parse(vector.ID, []byte(source), DialectPOSIX)
-					if err != nil || file == nil || !file.syntaxValid || len(diagnostics) != 0 {
-						t.Fatalf("%s: %v %#v", vector.ID, err, diagnostics)
-					}
+
+	// This is exhaustive over every ordered sequence of the three independent
+	// word-part classes through length four: 3+9+27+81 = 120 obligations.
+	wordParts := []string{"x", "${value:-x}", "$(printf x)"}
+	appendSequences(wordParts, 4, func(parts []string) {
+		var expectedKinds []WordPartKind
+		for _, part := range parts {
+			kind := WordLiteral
+			switch part {
+			case "${value:-x}":
+				kind = WordParameterExpansion
+			case "$(printf x)":
+				kind = WordCommandSubstitution
+			}
+			if kind == WordLiteral && len(expectedKinds) != 0 && expectedKinds[len(expectedKinds)-1] == WordLiteral {
+				continue // the lexer canonically coalesces adjacent literal bytes
+			}
+			expectedKinds = append(expectedKinds, kind)
+		}
+		vector := validVector(fmt.Sprintf("bounded/word/%04d", len(vectors)), DialectPOSIX,
+			"printf '%s\\n' "+strings.Join(parts, "")+"\n", nil, fmt.Sprintf("word-parts=%v", expectedKinds))
+		vectors = append(vectors, vector)
+		file := checkBoundedVector(t, vector)
+		commands := nodesDepthFirst(file.Nodes())
+		found := false
+		for _, command := range commands {
+			words := command.Words()
+			if len(words) >= 3 {
+				actualParts := words[len(words)-1].Parts()
+				actualKinds := make([]WordPartKind, len(actualParts))
+				for index := range actualParts {
+					actualKinds[index] = actualParts[index].Kind()
+				}
+				if reflect.DeepEqual(actualKinds, expectedKinds) {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("%s: AST lacks ordered word parts %v", vector.ID, expectedKinds)
+		}
+	})
+
+	// Every ordered heterogeneous pipeline over the three command forms through
+	// length three is executed: 3+9+27 = 39 obligations.
+	commandForms := []string{":", "printf x", "value=x :"}
+	appendSequences(commandForms, 3, func(commands []string) {
+		vector := validVector(fmt.Sprintf("bounded/pipeline/%04d", len(vectors)), DialectPOSIX,
+			strings.Join(commands, " | ")+"\n", nil, fmt.Sprintf("pipeline-members=%d", len(commands)))
+		vectors = append(vectors, vector)
+		file := checkBoundedVector(t, vector)
+		nodes := file.Nodes()
+		if len(commands) > 1 && (len(nodes) != 1 || nodes[0].Kind() != NodePipeline || len(nodes[0].Children()) != len(commands)) {
+			t.Fatalf("%s: pipeline AST=%#v", vector.ID, nodes)
+		}
+	})
+
+	// Redirection location and ownership are a full local Cartesian product.
+	redirects := []struct {
+		spelling, operator string
+		io                 int
+		hasIO              bool
+	}{
+		{spelling: ">out", operator: ">"},
+		{spelling: "3>>out", operator: ">>", io: 3, hasIO: true},
+		{spelling: "<in", operator: "<"},
+	}
+	for owner := 0; owner < 2; owner++ {
+		for _, position := range []string{"prefix", "suffix"} {
+			for _, redirect := range redirects {
+				commands := []string{":", ":"}
+				if position == "prefix" {
+					commands[owner] = redirect.spelling + " :"
+				} else {
+					commands[owner] = ": " + redirect.spelling
+				}
+				vector := validVector(fmt.Sprintf("bounded/redirect/o%d/%s/%s", owner, position, redirect.operator),
+					DialectPOSIX, strings.Join(commands, " | ")+"\n", nil,
+					fmt.Sprintf("redirect-owner=%d;position=%s;operator=%s", owner, position, redirect.operator))
+				vectors = append(vectors, vector)
+				file := checkBoundedVector(t, vector)
+				pipeline := file.Nodes()[0]
+				children := pipeline.Children()
+				if len(children) != 2 || len(children[owner].Redirections()) != 1 || len(children[1-owner].Redirections()) != 0 {
+					t.Fatalf("%s: redirection ownership=%#v", vector.ID, children)
+				}
+				actual := children[owner].Redirections()[0]
+				io, hasIO := actual.IONumber()
+				if actual.Operator() != redirect.operator || io != redirect.io || hasIO != redirect.hasIO {
+					t.Fatalf("%s: redirection=%#v io=%d/%v", vector.ID, actual, io, hasIO)
 				}
 			}
 		}
 	}
+
 	assertModelFingerprint(t, "bounded-recursive", vectors)
 }

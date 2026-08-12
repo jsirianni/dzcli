@@ -1,14 +1,17 @@
 {
-  "modelVersion": "shellvalidate-generated-v1",
+  "schemaVersion": 2,
+  "modelVersion": "shellvalidate-generated-v2",
+  "normativeDigest": "4d0e85258fdeceb909eb8ea920aeb758bcd435a126da475994a4258e18fe6932",
+  "changeNote": "v2 replaces production-derived and repeatability-only domains with independently authored executable conformance vectors and truthful local/combinatorial coverage metadata.",
   "models": [
-    {"id":"arithmetic","count":26,"sha256":"797264f6e5300deb88b5a8b07e32547898fbb18568cab0176180d94588e9f54f"},
-    {"id":"bounded-recursive","count":144,"sha256":"e88b309ee83fab1744fc0311335d583e1cdefcea4cfda5605eeb3b10dc84aad4","bounds":{"compoundDepth":3,"pipelineLength":3,"wordParts":4,"redirections":2}},
-    {"id":"conditional","count":7,"sha256":"efd472f9f6d40449479c5413fb77ff9b57a0be51f8043de6cfbf2e2594f5972e"},
-    {"id":"delimiter-deletion","count":10,"sha256":"4e851e3142b77abb6a5b5d641d2dc0bcd21a808cc3dbc3c68d37e595e549b04f"},
-    {"id":"heredocs","count":6,"sha256":"4e951de0e33b2e0063bbd047cf31cb969ac73013054ffb32e1aa6337be79c02c"},
-    {"id":"operators","count":58,"sha256":"68a0a3bdbb4e994a20391c81e89a4fe841145829fbcdbb1b8a01e966fff84f51"},
-    {"id":"pairwise","count":12,"sha256":"afd46faa96ef72f16283c4a46e45f5ac1fbad0350cd4027f57df9fc1017b28c5"},
-    {"id":"redirections","count":12,"sha256":"40c1d9c66ee9d74c310c4251c6fff4c4339c90c19dbbe27571ef9b31bb6473ea"},
-    {"id":"separators","count":10,"sha256":"52c642a321ba44ecd5d04da664d95a142dcb930da2b030f7c6ea202afede29d8"}
+    {"id":"arithmetic","count":31,"sha256":"1409d6fd1e0073723d4d36b5e153fbb4de1138362d4b0a2c28c2fa3d128efe23","obligations":31,"executed":31,"strength":"exhaustive normative binary-operator inventory"},
+    {"id":"bounded-recursive","count":171,"sha256":"e86739f8cc04c6440e4e68d2d08e6fd81af8b4c53a50285c5224166708e8d1e4","obligations":171,"executed":171,"strength":"exhaustive within each local domain; no full cross-domain Cartesian claim","bounds":{"pipelineAlphabet":3,"pipelineLength":3,"redirectKinds":3,"redirectOwners":2,"redirectPositions":2,"wordPartAlphabet":3,"wordParts":4}},
+    {"id":"conditional","count":15,"sha256":"115546cfa26374adcffe7c8e435d62768f2042ee161675f9bf86e66f5d6e83ab","obligations":15,"executed":15,"strength":"exhaustive normative binary-comparison inventory"},
+    {"id":"delimiter-deletion","count":10,"sha256":"4e851e3142b77abb6a5b5d641d2dc0bcd21a808cc3dbc3c68d37e595e549b04f","obligations":10,"executed":10,"strength":"exhaustive declared delimiter-deletion classes"},
+    {"id":"heredocs","count":6,"sha256":"4e951de0e33b2e0063bbd047cf31cb969ac73013054ffb32e1aa6337be79c02c","obligations":6,"executed":6,"strength":"full delimiter-quote by tab-strip Cartesian product"},
+    {"id":"operators","count":58,"sha256":"a072aa378753757c87246142fdb071e1131fbfa813f3eaab3ec32f1ca3681fd0","obligations":58,"executed":58,"strength":"full dialect by normative lexical-operator inventory"},
+    {"id":"pairwise","count":14,"sha256":"5fb5f4ff0469dcdfeabd8b111e9c59a4758b0eb6c919307b93bbe264886fcdbe","obligations":50,"executed":14,"strength":"t=2 across all feasible dialect, quote, part, and context value pairs","exclusions":[{"reason":"single-quote-suppresses-expansion","count":18}]},
+    {"id":"redirections","count":12,"sha256":"40c1d9c66ee9d74c310c4251c6fff4c4339c90c19dbbe27571ef9b31bb6473ea","obligations":12,"executed":12,"strength":"exhaustive declared redirection-operator inventory"},
+    {"id":"separators","count":10,"sha256":"4928400d261631d430e3930ffe7d623168308da97b7c84738dc87c51580331ee","obligations":10,"executed":10,"strength":"exhaustive declared separator-context inventory"}
   ]
 }
