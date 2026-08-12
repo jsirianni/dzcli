@@ -1,6 +1,12 @@
 name: Shell validator deep tests
 
 on:
+  pull_request:
+    paths:
+      - "shellvalidate/**"
+      - ".github/workflows/shellvalidate-deep.yml"
+      - "go.mod"
+      - "go.sum"
   schedule:
     - cron: "23 4 * * 1"
   workflow_dispatch:
@@ -9,9 +15,10 @@ permissions:
   contents: read
 
 jobs:
-  deterministic:
-    name: deterministic-deep
+  deep:
+    name: conformance-mutation-coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -22,26 +29,60 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Replay deterministic models twice
-        run: go test ./shellvalidate -run 'Test(BoundedRecursiveModel|DeterministicPairwiseModel|DeterministicPropertyCorpus|RecoveryMutationModel|MutationKillAudit)$' -count=2
+      - name: Replay every generated model twice
+        run: go test ./shellvalidate -run '^TestGeneratedModel_' -count=2
 
-      - name: Test without cgo
+      - name: Test repository without cgo
         env:
           CGO_ENABLED: "0"
         run: go test ./...
 
-  race:
-    name: race-hardening
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-
       - name: Run race suite
         run: go test -race ./shellvalidate
+
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts
+
+      - name: Measure package statement coverage
+        run: |
+          mkdir -p artifacts
+          go test ./shellvalidate -covermode=atomic -coverprofile=artifacts/shellvalidate.coverprofile
+
+      - name: Enforce 90 percent statement coverage
+        run: go run ./shellvalidate/internal/cmd/covergate -profile artifacts/shellvalidate.coverprofile -min 90.0
+
+      - name: Run deterministic source mutations
+        run: go run ./shellvalidate/internal/cmd/mutest -root . -manifest shellvalidate/testdata/spec/mutants.json -out artifacts/shellvalidate-mutation
+
+      - name: Render observed evidence
+        run: >-
+          go run ./shellvalidate/internal/cmd/evidence
+          -root .
+          -source-commit "${{ github.sha }}"
+          -coverprofile artifacts/shellvalidate.coverprofile
+          -mutation-results artifacts/shellvalidate-mutation/results.json
+          -out artifacts/shellvalidate-evidence
+
+      - name: Upload coverage profile
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: shellvalidate-coverage-${{ github.sha }}
+          path: artifacts/shellvalidate.coverprofile
+          if-no-files-found: warn
+
+      - name: Upload mutation results and logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: shellvalidate-mutation-${{ github.sha }}
+          path: artifacts/shellvalidate-mutation
+          if-no-files-found: warn
+
+      - name: Upload runtime evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: shellvalidate-evidence-${{ github.sha }}
+          path: artifacts/shellvalidate-evidence
+          if-no-files-found: warn

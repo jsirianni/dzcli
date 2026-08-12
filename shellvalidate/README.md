@@ -43,7 +43,9 @@ programs or access the network.
 ## Test model
 
 The deterministic conformance suite is documented in [TESTING.md](TESTING.md).
-It provides machine-audited traceability, bounded exhaustive generation,
-interaction coverage, input mutations, fuzz-regression replay, and critical
-implementation-mutant probes. “Exhaustive” is limited to the declared finite
-models and does not mean enumeration of every possible shell script.
+It provides machine-audited traceability, explicitly bounded local-domain
+enumeration, interaction coverage, input mutation, fuzz-regression replay, and
+real deterministic source mutation. “Exhaustive” is limited to a named finite
+local domain and does not mean enumeration of every possible shell script.
+Deep CI enforces a 90.0% package statement-coverage floor and publishes runtime
+evidence; `COVERAGE.md` records expectations rather than observed CI results.

@@ -1,16 +1,72 @@
 [
-  {"id":"LEX001","sourceOrder":1,"target":"maximal-munch operator selection","critical":true,"killedBy":"TestMutationKillAudit/LEX001"},
-  {"id":"LEX002","sourceOrder":2,"target":"NUL detection in nested lexical modes","critical":true,"killedBy":"TestMutationKillAudit/LEX002"},
-  {"id":"PAR001","sourceOrder":3,"target":"required compound closer","critical":true,"killedBy":"TestMutationKillAudit/PAR001"},
-  {"id":"PAR002","sourceOrder":4,"target":"right-associative arithmetic assignment","critical":true,"killedBy":"TestMutationKillAudit/PAR002"},
-  {"id":"PAR003","sourceOrder":5,"target":"arithmetic multiplication precedence","critical":true,"killedBy":"TestMutationKillAudit/PAR003"},
-  {"id":"PAR004","sourceOrder":6,"target":"POSIX dialect gate","critical":true,"killedBy":"TestMutationKillAudit/PAR004"},
-  {"id":"PAR005","sourceOrder":7,"target":"here-document recognition in arithmetic mode","critical":true,"killedBy":"TestMutationKillAudit/PAR005"},
-  {"id":"ANA001","sourceOrder":8,"target":"control diagnostic emission","critical":true,"killedBy":"TestMutationKillAudit/ANA001"},
-  {"id":"ANA002","sourceOrder":9,"target":"quoted-expansion non-trigger","critical":true,"killedBy":"TestMutationKillAudit/ANA002"},
-  {"id":"ANA003","sourceOrder":10,"target":"dynamic-analysis uncertainty propagation","critical":true,"killedBy":"TestMutationKillAudit/ANA003"},
-  {"id":"API001","sourceOrder":11,"target":"diagnostic half-open end span","critical":true,"killedBy":"TestMutationKillAudit/API001"},
-  {"id":"API002","sourceOrder":12,"target":"diagnostic cap enforcement","critical":true,"killedBy":"TestMutationKillAudit/API002"},
-  {"id":"REC001","sourceOrder":13,"target":"recovery progress after unexpected closer","critical":true,"killedBy":"TestMutationKillAudit/REC001"},
-  {"id":"SRC001","sourceOrder":14,"target":"source-cycle uncertainty propagation","critical":true,"killedBy":"TestMutationKillAudit/SRC001"}
+  {
+    "id": "LEX001", "sourceOrder": 1, "target": "maximal-munch operator selection", "critical": true,
+    "killedBy": "TestMutationBehavior/LEX001",
+    "selector": {"file": "shellvalidate/lexer.go", "declaration": "operatorAt", "declarationHash": "b63d0470416dc14216745e353630a25128f7cac14cce44ce71c587461a56f1f9", "before": "return operator", "after": "return operator[:1]"}
+  },
+  {
+    "id": "LEX002", "sourceOrder": 2, "target": "NUL detection in nested lexical modes", "critical": true,
+    "killedBy": "TestMutationBehavior/LEX002",
+    "selector": {"file": "shellvalidate/lexer.go", "declaration": "lexSkippingHereDocuments", "declarationHash": "dfb54b6569957faf3cd1a55bf8b11a3a0109813c8cd31ff9ef9b28fca50639fe", "before": "if value == 0 {", "after": "if value == 1 {"}
+  },
+  {
+    "id": "PAR001", "sourceOrder": 3, "target": "required compound closer", "critical": true,
+    "killedBy": "TestMutationBehavior/PAR001",
+    "selector": {"file": "shellvalidate/parser.go", "declaration": "shellParser.parseIf", "declarationHash": "bba289ea13c4c7af37d73e6271936eaedd6deefc9070e51d3da85eca1cdac323", "before": "parser.missingWord(opener, \"fi\")", "after": "parser.missingWord(opener, \"done\")"}
+  },
+  {
+    "id": "PAR002", "sourceOrder": 4, "target": "right-associative arithmetic assignment", "critical": true,
+    "killedBy": "TestMutationBehavior/PAR002",
+    "selector": {"file": "shellvalidate/parser_expr.go", "declaration": "arithmeticBinary", "declarationHash": "f4b6ad7ffef20ee64e8b14ba4316db3979594638254ada424157f1484dc6de7e", "before": "right := operator == \"**\" || precedence == 2", "after": "right := operator == \"**\""}
+  },
+  {
+    "id": "PAR003", "sourceOrder": 5, "target": "arithmetic multiplication precedence", "critical": true,
+    "killedBy": "TestMutationBehavior/PAR003",
+    "selector": {"file": "shellvalidate/parser_expr.go", "declaration": "arithmeticPrecedence", "declarationHash": "f959f69c9706c7755d46ffbcdee512464cacff824f2e6a851b050ea378726607", "before": "\"*\": 13", "after": "\"*\": 11"}
+  },
+  {
+    "id": "PAR004", "sourceOrder": 6, "target": "POSIX dialect gate", "critical": true,
+    "killedBy": "TestMutationBehavior/PAR004",
+    "selector": {"file": "shellvalidate/parser.go", "declaration": "bashOnlyDiagnostics", "declarationHash": "aa411b562c0a2e9555a933b126e8d880aab6040f0017303e586535bbdd9748dd", "before": "if dialect != DialectPOSIX {", "after": "if dialect == DialectPOSIX {"}
+  },
+  {
+    "id": "PAR005", "sourceOrder": 7, "target": "parser-owned here-document recognition", "critical": true,
+    "killedBy": "TestMutationBehavior/PAR005",
+    "selector": {"file": "shellvalidate/parser.go", "declaration": "shellParser.parseRedirection", "declarationHash": "135c33b42e74678b347a2d6a899dd3e7727116f14cf258134042e6d3cecc7a80", "before": "if operator.text == \"<<\" || operator.text == \"<<-\" {", "after": "if false {"}
+  },
+  {
+    "id": "ANA001", "sourceOrder": 8, "target": "control diagnostic emission", "critical": true,
+    "killedBy": "TestMutationBehavior/ANA001",
+    "selector": {"file": "shellvalidate/analyze.go", "declaration": "analysisContext.checkControlNode", "declarationHash": "6dbfec30106de275875cc2e9a93ad14d3809efb64c0b522561369c8199589be2", "before": "if loopDepth == 0 {", "after": "if loopDepth < 0 {"}
+  },
+  {
+    "id": "ANA002", "sourceOrder": 9, "target": "quoted-expansion non-trigger", "critical": true,
+    "killedBy": "TestMutationBehavior/ANA002",
+    "selector": {"file": "shellvalidate/analyze.go", "declaration": "unquotedExpansionSpans", "declarationHash": "b053a57f564cfd37e3b9f8c1e0e8474b30ff4402a0c6e3d04caa02802bfb57d2", "before": "if part.quote == QuoteUnquoted &&", "after": "if part.quote != QuoteUnquoted &&"}
+  },
+  {
+    "id": "ANA003", "sourceOrder": 10, "target": "dynamic-analysis uncertainty propagation", "critical": true,
+    "killedBy": "TestMutationBehavior/ANA003",
+    "selector": {"file": "shellvalidate/analyze.go", "declaration": "securityPass.Run", "declarationHash": "c1d1e2e9dc44bb65d568349f978ad9499ec2e26b58cc38976654690eaf23e14e", "before": "analysis.inexact(command.nameWord.span.Start.Offset, command.end, \"dynamic eval content prevents exact analysis\")", "after": "analysis.exact = analysis.exact && true"}
+  },
+  {
+    "id": "API001", "sourceOrder": 11, "target": "diagnostic half-open end span", "critical": true,
+    "killedBy": "TestMutationBehavior/API001",
+    "selector": {"file": "shellvalidate/analyze.go", "declaration": "analysisContext.checkControlNode", "declarationHash": "6dbfec30106de275875cc2e9a93ad14d3809efb64c0b522561369c8199589be2", "before": "view.name+\" is only valid inside a loop\", view.nameWord.span.Start.Offset, view.nameWord.span.End.Offset))", "after": "view.name+\" is only valid inside a loop\", view.nameWord.span.Start.Offset, view.nameWord.span.Start.Offset))"}
+  },
+  {
+    "id": "API002", "sourceOrder": 12, "target": "diagnostic cap enforcement", "critical": true,
+    "killedBy": "TestMutationBehavior/API002",
+    "selector": {"file": "shellvalidate/api.go", "declaration": "diagnosticLimit", "declarationHash": "2cfee4a76294a64df72cd461f2e2c8d6b6c97c2356dc6a09dd324b79bc6b7071", "before": "return value", "after": "return value + 1"}
+  },
+  {
+    "id": "REC001", "sourceOrder": 13, "target": "recovery progress after unexpected closer", "critical": true,
+    "killedBy": "TestMutationBehavior/REC001",
+    "selector": {"file": "shellvalidate/parser.go", "declaration": "shellParser.parseSequence", "declarationHash": "800b7a250ac98411ea8094924283cabba8a0ebd3411f56c4cfc59179f5ddd8b5", "before": "if parser.isOperator(\";;\", \";&\", \";;&\") {", "after": "if false && parser.isOperator(\";;\", \";&\", \";;&\") {"}
+  },
+  {
+    "id": "SRC001", "sourceOrder": 14, "target": "source-cycle uncertainty propagation", "critical": true,
+    "killedBy": "TestMutationBehavior/SRC001",
+    "selector": {"file": "shellvalidate/analyze.go", "declaration": "analyzeNestedLiteral", "declarationHash": "7856ca1178066d5322dc2ad5d6d04a891064bd7cf97a88ce7fb4c93a71566825", "before": "analysis.inexact(command.start, command.end, \"sourced-file cycle prevents repeated analysis\")", "after": "analysis.add(\"incomplete\", analysis.source.diagnostic(\"SHI1001\", SeverityInfo, ConfidenceDefinite, \"sourced-file cycle prevents repeated analysis\", command.start, command.end))"}
+  }
 ]

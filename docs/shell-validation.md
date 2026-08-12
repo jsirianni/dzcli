@@ -27,8 +27,10 @@ load native code, access the network, traverse the filesystem, or read sourced
 files implicitly.
 
 The package test suite uses specification-traceable catalogs, stable AST
-snapshots, bounded exhaustive generation, deterministic interaction arrays,
-input mutations, replayable fuzz regressions, and critical implementation
-mutants. Its exhaustive claim applies to the declared finite models and bounds,
-not to the unbounded set of all shell programs. See
-`shellvalidate/TESTING.md` for the exact counts, bounds, and CI tiers.
+snapshots, explicitly bounded local-domain enumeration, deterministic
+interaction arrays, input mutations, replayable fuzz regressions, and real
+source mutations. Exhaustive claims apply only to a named finite local domain;
+they do not cover the unbounded set of shell programs. Deep pull-request CI
+enforces a 90.0% package statement-coverage floor and uploads commit-specific
+coverage, mutation, and conformance evidence. See `shellvalidate/TESTING.md`
+for the exact counts, bounds, exclusions, and CI tiers.

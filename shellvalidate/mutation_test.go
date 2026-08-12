@@ -1,28 +1,16 @@
 package shellvalidate
 
 import (
-	"encoding/json"
-	"os"
 	"strings"
 	"testing"
+
+	"dzcli/shellvalidate/internal/mutest"
 )
 
-type implementationMutant struct {
-	ID          string `json:"id"`
-	SourceOrder int    `json:"sourceOrder"`
-	Target      string `json:"target"`
-	Critical    bool   `json:"critical"`
-	KilledBy    string `json:"killedBy"`
-}
-
-func loadImplementationMutants(t *testing.T) []implementationMutant {
+func loadImplementationMutants(t *testing.T) []mutest.Mutant {
 	t.Helper()
-	data, err := os.ReadFile("testdata/spec/mutants.json")
+	mutants, err := mutest.LoadManifest("testdata/spec/mutants.json")
 	if err != nil {
-		t.Fatal(err)
-	}
-	var mutants []implementationMutant
-	if err := json.Unmarshal(data, &mutants); err != nil {
 		t.Fatal(err)
 	}
 	return mutants
@@ -46,8 +34,19 @@ func TestMutationManifestAudit(t *testing.T) {
 		if !mutant.Critical {
 			t.Fatalf("mutant %s needs an explicit survivor classification", mutant.ID)
 		}
-		if mutant.KilledBy != "TestMutationKillAudit/"+mutant.ID {
+		if mutant.KilledBy != "TestMutationBehavior/"+mutant.ID {
 			t.Fatalf("mutant %s kill mapping = %q", mutant.ID, mutant.KilledBy)
+		}
+		if mutant.Selector == nil {
+			t.Fatalf("critical mutant %s has no source selector", mutant.ID)
+		}
+		filename := strings.TrimPrefix(mutant.Selector.File, "shellvalidate/")
+		digest, err := mutest.DeclarationHash(filename, mutant.Selector.Declaration)
+		if err != nil {
+			t.Fatalf("mutant %s: %v", mutant.ID, err)
+		}
+		if digest != mutant.Selector.DeclarationHash {
+			t.Fatalf("mutant %s declaration hash is stale: got %s want %s", mutant.ID, digest, mutant.Selector.DeclarationHash)
 		}
 		previous = mutant.SourceOrder
 	}
@@ -56,19 +55,19 @@ func TestMutationManifestAudit(t *testing.T) {
 	}
 }
 
-func TestMutationKillAudit(t *testing.T) {
+func TestMutationBehavior(t *testing.T) {
 	mutants := loadImplementationMutants(t)
 	for _, mutant := range mutants {
 		mutant := mutant
 		t.Run(mutant.ID, func(t *testing.T) {
-			if !killsMutant(t, mutant.ID) {
-				t.Fatalf("critical mutant survived: %s (%s)", mutant.ID, mutant.Target)
+			if !mutationBehaviorHolds(t, mutant.ID) {
+				t.Fatalf("behavioral obligation failed: %s (%s)", mutant.ID, mutant.Target)
 			}
 		})
 	}
 }
 
-func killsMutant(t *testing.T, id string) bool {
+func mutationBehaviorHolds(t *testing.T, id string) bool {
 	t.Helper()
 	switch id {
 	case "LEX001":
@@ -78,7 +77,8 @@ func killsMutant(t *testing.T, id string) bool {
 		return err == nil && hasCode(diagnostics, "SHS1003")
 	case "PAR001":
 		file, diagnostics, err := Parse("closer.sh", []byte("if true; then :"), DialectPOSIX)
-		return err == nil && file != nil && !file.syntaxValid && hasCode(diagnostics, "SHS1004")
+		diagnostic, ok := diagnosticByCode(diagnostics, "SHS1004")
+		return err == nil && file != nil && !file.syntaxValid && ok && strings.Contains(diagnostic.Message, "closing fi")
 	case "PAR002":
 		file, diagnostics, err := Parse("assoc.sh", []byte("((a=b=c))\n"), DialectBash)
 		if err != nil || len(diagnostics) != 0 {
@@ -97,8 +97,12 @@ func killsMutant(t *testing.T, id string) bool {
 		result, err := Check(t.Context(), "dialect.sh", []byte("[[ x ]]\n"), Options{Dialect: DialectPOSIX})
 		return err == nil && hasCode(result.Diagnostics, "SHD1001")
 	case "PAR005":
-		_, diagnostics, err := Parse("shift.sh", []byte("((a << 2))\n"), DialectBash)
-		return err == nil && !hasCode(diagnostics, "SHS1006")
+		file, diagnostics, err := Parse("document.sh", []byte("cat <<EOF\nbody\nEOF\n"), DialectPOSIX)
+		if err != nil || len(diagnostics) != 0 || len(file.Nodes()) != 1 {
+			return false
+		}
+		redirections := file.Nodes()[0].Redirections()
+		return len(redirections) == 1 && redirections[0].HereDocument() != nil && string(redirections[0].HereDocument().Body()) == "body\n"
 	case "ANA001":
 		result, err := Check(t.Context(), "control.sh", []byte("break\n"), Options{Dialect: DialectPOSIX})
 		return err == nil && hasCode(result.Diagnostics, "SHC1001")
@@ -116,8 +120,18 @@ func killsMutant(t *testing.T, id string) bool {
 		result, err := Check(t.Context(), "cap.sh", []byte(strings.Repeat("break;", 4)), Options{Dialect: DialectPOSIX, MaxDiagnostics: 3})
 		return err == nil && len(result.Diagnostics) == 3
 	case "REC001":
-		file, diagnostics, err := Parse("recovery.sh", []byte(")\necho ok\n"), DialectPOSIX)
-		return err == nil && file != nil && len(file.Nodes()) != 0 && hasCode(diagnostics, "SHS1005")
+		source := []byte("echo before;; echo after\n")
+		file, diagnostics, err := Parse("recovery.sh", source, DialectPOSIX)
+		if err != nil || file == nil || !hasCode(diagnostics, "SHS1005") {
+			return false
+		}
+		for _, node := range file.Nodes() {
+			span := node.Span()
+			if node.Kind() == NodeCommand && span.Start.Offset >= len("echo before;; ") && string(source[span.Start.Offset:span.End.Offset]) == "echo after" {
+				return true
+			}
+		}
+		return false
 	case "SRC001":
 		resolver := mapResolver{files: map[string][]byte{"a.sh": []byte(". b.sh\n"), "b.sh": []byte(". a.sh\n")}}
 		result, err := Check(t.Context(), "a.sh", resolver.files["a.sh"], Options{Dialect: DialectPOSIX, AnalyzeSourced: true, Resolver: resolver})

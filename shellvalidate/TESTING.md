@@ -1,9 +1,10 @@
 # Deterministic conformance testing
 
-The `shellvalidate` suite claims complete, machine-audited coverage of its
-declared model. It does not claim to enumerate every possible shell program.
-The input language is unbounded, and the catalogs explicitly classify
-unsupported and dynamically unknowable behavior.
+The `shellvalidate` suite provides machine-audited traceability for its
+declared model. It does not claim to enumerate every shell program or prove
+complete conformance to the full POSIX and Bash languages. The input language
+is unbounded, and the catalogs classify unsupported and dynamically
+unknowable behavior.
 
 ## Deterministic evidence
 
@@ -12,16 +13,18 @@ The normal `go test ./...` acceptance suite includes:
 - separate lexical, grammar, dialect, semantic, rule, and robustness catalogs;
 - an audit that rejects malformed catalogs and missing test mappings;
 - exact stable AST snapshots and byte-oriented diagnostic spans;
-- 285 generated vectors across nine versioned models;
-- complete local enumeration through compound depth 3, pipeline length 3,
-  four word parts, and two redirections per command;
+- versioned generated vectors across nine models, with counts and digests in
+  `COVERAGE.md`;
+- separate complete local domains for pipelines through length 3, words
+  through four parts, and redirection ownership/placement combinations; these
+  domains are not a full Cartesian product and make no compound-depth claim;
 - deterministic pairwise interaction vectors with achieved-tuple auditing;
-- trigger and nearest non-trigger decisions for all 23 diagnostics;
+- trigger and nearest non-trigger decisions for every declared diagnostic;
 - deterministic truncation, token deletion, byte corruption, and resource
   boundary mutations;
 - replay of every committed native-fuzz seed in both dialects; and
-- 14 stable critical implementation-mutant probes, all of which must be
-  killed.
+- 14 stable critical source-mutation contracts whose observed status is
+  determined by the mutation runner, rather than declared by a unit test.
 
 Generated vector counts and SHA-256 fingerprints are recorded in
 `testdata/spec/generated_models.json`. Changing a model requires an intentional
@@ -30,17 +33,26 @@ locale, network data, or uncontrolled randomness.
 
 ## CI tiers
 
-Pull requests run the repository `test`, `gosec`, and `revive` jobs. The
-scheduled `Shell validator deep tests` workflow replays the largest
-deterministic models twice, tests with `CGO_ENABLED=0`, and runs the race suite.
-Native Go fuzzing remains a discovery channel. A discovered failure is only
-part of deterministic coverage after it is minimized, linked to a feature,
-and committed to `testdata/spec/fuzz_regressions.json`.
+Pull requests that touch the package, deep workflow, or module files run the
+`Shell validator deep tests` workflow. It replays every
+`TestGeneratedModel_*` test twice, tests the repository with `CGO_ENABLED=0`,
+runs the package race suite, performs real deterministic source mutation, and
+enforces at least 90.0% package statement coverage. It uploads the cover
+profile, mutation results and per-mutant logs, and JSON/Markdown runtime
+evidence tied to the tested commit. The checked-in `COVERAGE.md` is an expected
+contract; it is not evidence of a CI run or of mutant kills.
+
+The normal repository `test`, `gosec`, and `revive` checks continue to run
+according to the repository CI workflow. Native Go fuzzing remains a discovery
+channel. A discovered failure is only part of deterministic coverage after it
+is minimized, linked to a feature, and committed to
+`testdata/spec/fuzz_regressions.json`.
 
 ## Interpretation
 
-“Exhaustive” means complete enumeration through the declared finite bounds and
-complete traceability for the declared catalog. It does not imply complete
-POSIX.1-2024 or Bash 5.3 conformance outside the behavior catalog. Increasing a
-bound or adding a language production changes the model version, generated
-count, and fingerprint.
+“Exhaustive” applies only to a specifically declared finite local domain, such
+as all values in one operator inventory. Pairwise models cover audited feasible
+2-way tuples and record exclusions; they are not Cartesian enumeration.
+Neither term implies complete POSIX.1-2024 or Bash 5.3 conformance outside the
+behavior catalog. Increasing a bound or adding a language production changes
+the model version, generated count, and fingerprint.
