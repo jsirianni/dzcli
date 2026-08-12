@@ -25,6 +25,11 @@ unknown command substitutions, runtime-generated names, aliases, and unknown
 external behavior can make `Result.AnalysisExact` false. The package reports
 that uncertainty instead of claiming a complete analysis.
 
+The current analyzer does not implement CFG joins or iterative fixed-point
+propagation across branches and loops. It emits only local definite claims for
+those constructs; the audited semantic catalog classifies this capability as
+unsupported instead of mapping it to an unrelated control-scope test.
+
 The parser preserves command, pipeline, compound-command, expression,
 redirection, and here-document structure. The analyzer implements the
 diagnostic families listed in `COVERAGE.md`; it is not a proof that every

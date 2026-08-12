@@ -17,6 +17,10 @@ evaluation, and sourced files supplied through a caller-owned resolver.
 Dynamic behavior is represented by `AnalysisExact=false` and an informational
 diagnostic when it materially limits the result.
 
+CFG joins and iterative fixed-point propagation across branches and loops are
+not implemented. The analyzer limits itself to local definite claims in those
+cases, and the semantic catalog records that limitation explicitly.
+
 Support is defined by the checked-in feature, rule, and deterministic-test
 catalogs. The package does not claim to model every runtime effect of arbitrary
 commands, aliases, dynamically generated code, or extensions outside those
