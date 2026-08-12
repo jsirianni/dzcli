@@ -1,0 +1,12 @@
+[
+  {"id":"semantic.symbols","status":"required","states":["unassigned","assigned-unknown","assigned-constant"],"tests":["TestSemanticTruthTables/variables"]},
+  {"id":"semantic.nounset","status":"required","states":["off","on"],"tests":["TestSemanticTruthTables/nounset"]},
+  {"id":"semantic.expansion","status":"required","states":["quoted","unquoted","safe","unknown"],"tests":["TestSemanticTruthTables/expansion"]},
+  {"id":"semantic.pipeline","status":"implementation-defined","choice":"Pipeline read assignment is treated as not visible to the parent.","states":["outside","input","output"],"tests":["TestSemanticTruthTables/pipeline"]},
+  {"id":"semantic.control","status":"required","states":["top-level","loop","source"],"tests":["TestSemanticTruthTables/control"]},
+  {"id":"semantic.redirection-order","status":"required","states":["combined","split"],"tests":["TestSemanticTruthTables/redirection"]},
+  {"id":"semantic.command-model","status":"required","states":["modeled","unmodeled"],"tests":["TestCommandModelDeterminism"]},
+  {"id":"semantic.literal-eval","status":"required","states":["static","dynamic"],"tests":["TestSourceResolverAndLiteralEval","TestDynamicAnalysisIsInexact"]},
+  {"id":"semantic.source","status":"dynamic-unknown","states":["disabled","resolved","dynamic","cycle","depth-limit"],"tests":["TestResolverStateModel"]},
+  {"id":"semantic.fixed-point","status":"not-applicable","rationale":"The current declared analysis model is a deterministic finite pass pipeline without iterative CFG fixed points.","tests":["TestNotApplicableCatalogRationale"]}
+]

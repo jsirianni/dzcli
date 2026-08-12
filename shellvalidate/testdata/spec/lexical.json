@@ -1,0 +1,17 @@
+[
+  {"id":"lex.input.bytes","status":"required","reference":"POSIX.1-2024 2.3","tests":["TestInvalidUTF8Preserved","TestSyntaxDiagnosticFamilies/nul"]},
+  {"id":"lex.line-ending","status":"implementation-defined","choice":"CR is whitespace and LF terminates a command.","reference":"POSIX.1-2024 2.3","tests":["TestWhitespaceAndNewlineVariants"]},
+  {"id":"lex.comment","status":"required","reference":"POSIX.1-2024 2.3","tests":["TestASTSnapshotContract/comment"]},
+  {"id":"lex.backslash","status":"required","reference":"POSIX.1-2024 2.2.1","tests":["TestLexicalBoundedModel/backslash"]},
+  {"id":"lex.quote.single","status":"required","reference":"POSIX.1-2024 2.2.2","tests":["TestLexicalBoundedModel/quotes"]},
+  {"id":"lex.quote.double","status":"required","reference":"POSIX.1-2024 2.2.3","tests":["TestLexicalBoundedModel/quotes"]},
+  {"id":"lex.quote.ansi","status":"extension","reference":"Bash 5.3 3.1.2.4","tests":["TestLexicalBoundedModel/quotes"]},
+  {"id":"lex.quote.locale","status":"extension","reference":"Bash 5.3 3.1.2.5","tests":["TestLexicalBoundedModel/quotes"]},
+  {"id":"lex.expansion.parameter","status":"required","reference":"POSIX.1-2024 2.6.2","tests":["TestLexicalBoundedModel/expansions"]},
+  {"id":"lex.expansion.command","status":"required","reference":"POSIX.1-2024 2.6.3","tests":["TestLexicalBoundedModel/expansions"]},
+  {"id":"lex.expansion.arithmetic","status":"required","reference":"POSIX.1-2024 2.6.4","tests":["TestLexicalBoundedModel/expansions"]},
+  {"id":"lex.expansion.process","status":"extension","reference":"Bash 5.3 3.5.6","tests":["TestDialectInteractionModel/process-substitution"]},
+  {"id":"lex.operator","status":"required","reference":"POSIX.1-2024 2.3","tests":["TestOperatorExhaustiveModel"]},
+  {"id":"lex.heredoc","status":"required","reference":"POSIX.1-2024 2.7.4","tests":["TestHereDocumentExhaustiveModel"]},
+  {"id":"lex.eof.modes","status":"required","reference":"POSIX.1-2024 2.3","tests":["TestDelimiterDeletionModel"]}
+]
