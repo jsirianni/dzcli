@@ -4,13 +4,13 @@ Generated from the machine-readable files under `testdata/`. Run `go generate ./
 
 ## Specification catalogs
 
-| Catalog | Entries | Required | Extensions | Classified |
-|---|---:|---:|---:|---:|
-| lexical | 15 | 11 | 3 | 1 |
-| grammar | 15 | 10 | 4 | 1 |
-| dialects | 6 | 1 | 1 | 4 |
-| semantics | 10 | 7 | 0 | 3 |
-| robustness | 10 | 10 | 0 | 0 |
+| Catalog | Entries | Declared obligations | Required | Extensions | Classified |
+|---|---:|---:|---:|---:|---:|
+| lexical | 15 | 15 | 11 | 3 | 1 |
+| grammar | 33 | 185 | 24 | 8 | 1 |
+| dialects | 6 | 14 | 1 | 1 | 4 |
+| semantics | 10 | 36 | 8 | 0 | 2 |
+| robustness | 10 | 29 | 10 | 0 | 0 |
 
 ## Syntax features
 
@@ -88,6 +88,7 @@ These declarations identify the required source mutations and their anchored tes
 - `ANA001` (critical): control diagnostic emission; required test anchor `TestMutationBehavior/ANA001`
 - `ANA002` (critical): quoted-expansion non-trigger; required test anchor `TestMutationBehavior/ANA002`
 - `ANA003` (critical): dynamic-analysis uncertainty propagation; required test anchor `TestMutationBehavior/ANA003`
+- `DATA001` (critical): control-flow certainty join; required test anchor `TestMutationBehavior/DATA001`
 - `API001` (critical): diagnostic half-open end span; required test anchor `TestMutationBehavior/API001`
 - `API002` (critical): diagnostic cap enforcement; required test anchor `TestMutationBehavior/API002`
 - `REC001` (critical): recovery progress after unexpected closer; required test anchor `TestMutationBehavior/REC001`

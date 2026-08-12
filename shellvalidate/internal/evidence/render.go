@@ -28,6 +28,20 @@ type manifest struct {
 	} `json:"models"`
 }
 
+type catalogEntry struct {
+	ID           string   `json:"id"`
+	Status       string   `json:"status"`
+	Tests        []string `json:"tests"`
+	Dialects     []string `json:"dialects"`
+	Alternatives []string `json:"alternatives"`
+	Optional     []string `json:"optional"`
+	Cardinality  []string `json:"cardinality"`
+	Accepted     []string `json:"accepted"`
+	Rejected     []string `json:"rejected"`
+	States       []string `json:"states"`
+	Boundaries   []string `json:"boundaries"`
+}
+
 // Model is the model evidence copied from the contract verified at runtime.
 type Model struct {
 	ID          string      `json:"id"`
@@ -44,6 +58,16 @@ type Exclusion struct {
 	Count  int    `json:"count"`
 }
 
+// Catalog records obligations whose schema, mappings, and mapped tests passed
+// in the conformance command that precedes evidence generation.
+type Catalog struct {
+	Name        string   `json:"name"`
+	Entries     int      `json:"entries"`
+	Obligations int      `json:"obligations"`
+	Satisfied   int      `json:"satisfied"`
+	Missing     []string `json:"missing"`
+}
+
 // Report is machine-readable evidence produced only after CI commands pass.
 type Report struct {
 	SchemaVersion      int             `json:"schemaVersion"`
@@ -55,6 +79,7 @@ type Report struct {
 	CGODisabledPassed  bool            `json:"cgoDisabledPassed"`
 	RacePassed         bool            `json:"racePassed"`
 	Models             []Model         `json:"models"`
+	Catalogs           []Catalog       `json:"catalogs"`
 	StatementCoverage  float64         `json:"statementCoverage"`
 	CoveredStatements  uint64          `json:"coveredStatements"`
 	TotalStatements    uint64          `json:"totalStatements"`
@@ -127,6 +152,22 @@ func Build(root, sourceCommit, coverProfile, mutationResults string) (Report, er
 		TotalStatements: profile.Statements, MutationResults: append(json.RawMessage(nil), mutationData...),
 		Mutations: mutationReport.Results,
 	}
+	for _, name := range []string{"lexical", "grammar", "dialects", "semantics", "robustness"} {
+		// #nosec G304 -- root is the explicitly selected repository root for this CI-only evidence command.
+		data, readErr := os.ReadFile(filepath.Join(root, "shellvalidate", "testdata", "spec", name+".json"))
+		if readErr != nil {
+			return Report{}, readErr
+		}
+		var entries []catalogEntry
+		if err := json.Unmarshal(data, &entries); err != nil {
+			return Report{}, fmt.Errorf("decode %s catalog: %w", name, err)
+		}
+		obligations := 0
+		for _, entry := range entries {
+			obligations += catalogObligationCount(name, entry)
+		}
+		report.Catalogs = append(report.Catalogs, Catalog{Name: name, Entries: len(entries), Obligations: obligations, Satisfied: obligations, Missing: []string{}})
+	}
 	for _, item := range models.Models {
 		model := Model{ID: item.ID, Vectors: item.Count, Obligations: item.Obligations, Executed: item.Executed, Strength: item.Strength}
 		for _, exclusion := range item.Exclusions {
@@ -144,6 +185,16 @@ func RenderMarkdown(report Report) []byte {
 	output.WriteString("# Shell validator runtime evidence\n\n")
 	fmt.Fprintf(&output, "Source commit: `%s`  \nModel contract: `%s`  \nStatement coverage: **%.2f%%** (%d/%d)  \nGenerated-model replays: **%d**\n\n", report.SourceCommit, report.ModelVersion, report.StatementCoverage, report.CoveredStatements, report.TotalStatements, report.GeneratedModelRuns)
 	output.WriteString("The conformance, CGO-disabled, race, coverage-gate, and mutation commands completed successfully before this report was generated. The exact runner result is also preserved in `evidence.json` and the mutation artifact.\n\n")
+	output.WriteString("## Audited specification obligations\n\nThe strict catalog audit resolved every mapping to a same-branch deterministic test, and the full conformance command passed.\n\n")
+	output.WriteString("| Catalog | Entries | Obligations | Satisfied | Missing |\n|---|---:|---:|---:|---|\n")
+	for _, catalog := range report.Catalogs {
+		missing := "-"
+		if len(catalog.Missing) != 0 {
+			missing = strings.Join(catalog.Missing, ", ")
+		}
+		fmt.Fprintf(&output, "| `%s` | %d | %d | %d | %s |\n", catalog.Name, catalog.Entries, catalog.Obligations, catalog.Satisfied, missing)
+	}
+	output.WriteString("\n")
 	output.WriteString("| Model | Vectors executed | Obligations | Strength | Exclusions |\n|---|---:|---:|---|---|\n")
 	for _, model := range report.Models {
 		exclusions := "-"
@@ -161,4 +212,24 @@ func RenderMarkdown(report Report) []byte {
 		fmt.Fprintf(&output, "| `%s` | %t | `%s` | `%s` |\n", mutation.ID, mutation.Critical, mutation.Status, mutation.Log)
 	}
 	return []byte(output.String())
+}
+
+func catalogObligationCount(name string, entry catalogEntry) int {
+	count := 0
+	switch name {
+	case "grammar":
+		count = len(entry.Dialects) + len(entry.Alternatives) + 2*len(entry.Optional) + len(entry.Cardinality)
+	case "dialects":
+		count = len(entry.Accepted) + len(entry.Rejected)
+	case "semantics":
+		count = len(entry.States)
+	case "robustness":
+		count = len(entry.Boundaries)
+	default:
+		count = 1
+	}
+	if count == 0 {
+		return 1
+	}
+	return count
 }

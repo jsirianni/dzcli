@@ -17,9 +17,10 @@ evaluation, and sourced files supplied through a caller-owned resolver.
 Dynamic behavior is represented by `AnalysisExact=false` and an informational
 diagnostic when it materially limits the result.
 
-CFG joins and iterative fixed-point propagation across branches and loops are
-not implemented. The analyzer limits itself to local definite claims in those
-cases, and the semantic catalog records that limitation explicitly.
+Variable and `nounset` option state are joined across conditional paths and
+iterated through loops with a bounded finite-lattice fixed point. Assignments
+inside subshells, pipeline components, and function definitions remain isolated
+from the parent execution context; maybe-assigned reads use likely confidence.
 
 Support is defined by the checked-in feature, rule, and deterministic-test
 catalogs. The package does not claim to model every runtime effect of arbitrary

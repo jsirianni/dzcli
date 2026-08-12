@@ -19,8 +19,16 @@ type rule struct {
 }
 
 type specificationEntry struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
+	ID           string   `json:"id"`
+	Status       string   `json:"status"`
+	Dialects     []string `json:"dialects"`
+	Alternatives []string `json:"alternatives"`
+	Optional     []string `json:"optional"`
+	Cardinality  []string `json:"cardinality"`
+	Accepted     []string `json:"accepted"`
+	Rejected     []string `json:"rejected"`
+	States       []string `json:"states"`
+	Boundaries   []string `json:"boundaries"`
 }
 
 type generatedModels struct {
@@ -93,11 +101,12 @@ func Render(root string) ([]byte, error) {
 	output.WriteString("# Coverage Catalog\n\n")
 	output.WriteString("Generated from the machine-readable files under `testdata/`. Run `go generate ./shellvalidate` after catalog changes.\n\n")
 	output.WriteString("## Specification catalogs\n\n")
-	output.WriteString("| Catalog | Entries | Required | Extensions | Classified |\n")
-	output.WriteString("|---|---:|---:|---:|---:|\n")
+	output.WriteString("| Catalog | Entries | Declared obligations | Required | Extensions | Classified |\n")
+	output.WriteString("|---|---:|---:|---:|---:|---:|\n")
 	for _, name := range catalogNames {
-		required, extensions := 0, 0
+		required, extensions, obligations := 0, 0, 0
 		for _, entry := range catalogs[name] {
+			obligations += specificationObligationCount(name, entry)
 			switch entry.Status {
 			case "required":
 				required++
@@ -105,7 +114,7 @@ func Render(root string) ([]byte, error) {
 				extensions++
 			}
 		}
-		fmt.Fprintf(&output, "| %s | %d | %d | %d | %d |\n", name, len(catalogs[name]), required, extensions, len(catalogs[name])-required-extensions)
+		fmt.Fprintf(&output, "| %s | %d | %d | %d | %d | %d |\n", name, len(catalogs[name]), obligations, required, extensions, len(catalogs[name])-required-extensions)
 	}
 	output.WriteString("\n")
 	output.WriteString("## Syntax features\n\n")
@@ -161,6 +170,26 @@ func Render(root string) ([]byte, error) {
 		fmt.Fprintf(&output, "- `%s` (%s): %s; required test anchor `%s`\n", item.ID, classification, item.Target, item.KilledBy)
 	}
 	return []byte(output.String()), nil
+}
+
+func specificationObligationCount(name string, entry specificationEntry) int {
+	count := 0
+	switch name {
+	case "grammar":
+		count = len(entry.Dialects) + len(entry.Alternatives) + 2*len(entry.Optional) + len(entry.Cardinality)
+	case "dialects":
+		count = len(entry.Accepted) + len(entry.Rejected)
+	case "semantics":
+		count = len(entry.States)
+	case "robustness":
+		count = len(entry.Boundaries)
+	default:
+		count = 1
+	}
+	if count == 0 {
+		return 1
+	}
+	return count
 }
 
 func read(root *os.Root, name string, target any) error {

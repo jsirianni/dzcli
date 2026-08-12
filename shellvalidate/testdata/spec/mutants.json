@@ -50,22 +50,27 @@
     "selector": {"file": "shellvalidate/analyze.go", "declaration": "securityPass.Run", "declarationHash": "c1d1e2e9dc44bb65d568349f978ad9499ec2e26b58cc38976654690eaf23e14e", "before": "analysis.inexact(command.nameWord.span.Start.Offset, command.end, \"dynamic eval content prevents exact analysis\")", "after": "analysis.exact = analysis.exact && true"}
   },
   {
-    "id": "API001", "sourceOrder": 11, "target": "diagnostic half-open end span", "critical": true,
+    "id": "DATA001", "sourceOrder": 11, "target": "control-flow certainty join", "critical": true,
+    "killedBy": "TestMutationBehavior/DATA001",
+    "selector": {"file": "shellvalidate/dataflow.go", "declaration": "joinCertainty", "declarationHash": "c2c775222c3d770f9f002732c732cbf92e545376459a56ac0c809bd2bdbfcf39", "before": "return flowMaybe", "after": "return flowDefinite"}
+  },
+  {
+    "id": "API001", "sourceOrder": 12, "target": "diagnostic half-open end span", "critical": true,
     "killedBy": "TestMutationBehavior/API001",
     "selector": {"file": "shellvalidate/analyze.go", "declaration": "analysisContext.checkControlNode", "declarationHash": "6dbfec30106de275875cc2e9a93ad14d3809efb64c0b522561369c8199589be2", "before": "view.name+\" is only valid inside a loop\", view.nameWord.span.Start.Offset, view.nameWord.span.End.Offset))", "after": "view.name+\" is only valid inside a loop\", view.nameWord.span.Start.Offset, view.nameWord.span.Start.Offset))"}
   },
   {
-    "id": "API002", "sourceOrder": 12, "target": "diagnostic cap enforcement", "critical": true,
+    "id": "API002", "sourceOrder": 13, "target": "diagnostic cap enforcement", "critical": true,
     "killedBy": "TestMutationBehavior/API002",
     "selector": {"file": "shellvalidate/api.go", "declaration": "diagnosticLimit", "declarationHash": "2cfee4a76294a64df72cd461f2e2c8d6b6c97c2356dc6a09dd324b79bc6b7071", "before": "return value", "after": "return value + 1"}
   },
   {
-    "id": "REC001", "sourceOrder": 13, "target": "recovery progress after unexpected closer", "critical": true,
+    "id": "REC001", "sourceOrder": 14, "target": "recovery progress after unexpected closer", "critical": true,
     "killedBy": "TestMutationBehavior/REC001",
     "selector": {"file": "shellvalidate/parser.go", "declaration": "shellParser.parseSequence", "declarationHash": "800b7a250ac98411ea8094924283cabba8a0ebd3411f56c4cfc59179f5ddd8b5", "before": "if parser.isOperator(\";;\", \";&\", \";;&\") {", "after": "if false && parser.isOperator(\";;\", \";&\", \";;&\") {"}
   },
   {
-    "id": "SRC001", "sourceOrder": 14, "target": "source-cycle uncertainty propagation", "critical": true,
+    "id": "SRC001", "sourceOrder": 15, "target": "source-cycle uncertainty propagation", "critical": true,
     "killedBy": "TestMutationBehavior/SRC001",
     "selector": {"file": "shellvalidate/analyze.go", "declaration": "analyzeNestedLiteral", "declarationHash": "7856ca1178066d5322dc2ad5d6d04a891064bd7cf97a88ce7fb4c93a71566825", "before": "analysis.inexact(command.start, command.end, \"sourced-file cycle prevents repeated analysis\")", "after": "analysis.add(\"incomplete\", analysis.source.diagnostic(\"SHI1001\", SeverityInfo, ConfidenceDefinite, \"sourced-file cycle prevents repeated analysis\", command.start, command.end))"}
   }

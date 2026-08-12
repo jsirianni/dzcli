@@ -50,7 +50,7 @@ func TestMutationManifestAudit(t *testing.T) {
 		}
 		previous = mutant.SourceOrder
 	}
-	if len(mutants) != 14 {
+	if len(mutants) != 15 {
 		t.Fatalf("critical mutants = %d", len(mutants))
 	}
 }
@@ -112,6 +112,10 @@ func mutationBehaviorHolds(t *testing.T, id string) bool {
 	case "ANA003":
 		result, err := Check(t.Context(), "dynamic.sh", []byte("eval \"$generated\"\n"), Options{Dialect: DialectPOSIX})
 		return err == nil && !result.AnalysisExact && hasCode(result.Diagnostics, "SHI1001")
+	case "DATA001":
+		result, err := Check(t.Context(), "join.sh", []byte("set -u\nif maybe; then value=1; fi\nprintf '%s' \"$value\"\n"), Options{Dialect: DialectPOSIX})
+		diagnostic, ok := diagnosticByCode(result.Diagnostics, "SHV1001")
+		return err == nil && ok && diagnostic.Confidence == ConfidenceLikely
 	case "API001":
 		result, err := Check(t.Context(), "span.sh", []byte("break\n"), Options{Dialect: DialectPOSIX})
 		diagnostic, ok := diagnosticByCode(result.Diagnostics, "SHC1001")

@@ -23,7 +23,7 @@ The normal `go test ./...` acceptance suite includes:
 - deterministic truncation, token deletion, byte corruption, and resource
   boundary mutations;
 - replay of every committed native-fuzz seed in both dialects; and
-- 14 stable critical source-mutation contracts whose observed status is
+- 15 stable critical source-mutation contracts whose observed status is
   determined by the mutation runner, rather than declared by a unit test.
 
 Generated vector counts and SHA-256 fingerprints are recorded in
