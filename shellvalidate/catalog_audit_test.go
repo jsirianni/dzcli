@@ -1,11 +1,17 @@
 package shellvalidate
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	gotoken "go/token"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -22,15 +28,50 @@ type auditEntry struct {
 	States       []string `json:"states"`
 	Boundaries   []string `json:"boundaries"`
 	Accepted     []string `json:"accepted"`
+	Rejected     []string `json:"rejected"`
+	Dialects     []string `json:"dialects"`
+	Repetition   bool     `json:"repetition"`
+	Bound        int      `json:"bound"`
+	Dialect      string   `json:"dialect"`
 }
 
 type contractCatalog struct {
-	ModelVersion   string            `json:"modelVersion"`
-	Baselines      []json.RawMessage `json:"baselines"`
-	Configurations []auditEntry      `json:"configurations"`
-	Statuses       map[string]string `json:"statuses"`
-	Input          json.RawMessage   `json:"input"`
-	Observable     json.RawMessage   `json:"observable"`
+	ModelVersion   string             `json:"modelVersion"`
+	Baselines      []baseline         `json:"baselines"`
+	Configurations []auditEntry       `json:"configurations"`
+	Statuses       map[string]string  `json:"statuses"`
+	Input          inputContract      `json:"input"`
+	Observable     observableContract `json:"observable"`
+}
+
+type baseline struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+	Section string `json:"section"`
+}
+
+type inputContract struct {
+	ArbitraryBytes          bool     `json:"arbitraryBytes"`
+	InvalidUTF8             string   `json:"invalidUTF8"`
+	NUL                     string   `json:"nul"`
+	LineEndings             []string `json:"lineEndings"`
+	Positions               string   `json:"positions"`
+	Spans                   string   `json:"spans"`
+	MaxSourceBytes          int      `json:"maxSourceBytes"`
+	MaxNesting              int      `json:"maxNesting"`
+	DefaultMaxDiagnostics   int      `json:"defaultMaxDiagnostics"`
+	MaxSourceDepth          int      `json:"maxSourceDepth"`
+	MaxRecoveryActions      string   `json:"maxRecoveryActions"`
+	MaxFixedPointIterations int      `json:"maxFixedPointIterations"`
+}
+
+type observableContract struct {
+	ChildOrdering      string   `json:"childOrdering"`
+	DiagnosticOrdering []string `json:"diagnosticOrdering"`
+	IncompleteNodes    string   `json:"incompleteNodes"`
+	DynamicUnknown     string   `json:"dynamicUnknown"`
+	ResourceLimits     string   `json:"resourceLimits"`
+	ParallelSafety     string   `json:"parallelSafety"`
 }
 
 var allowedBehaviorStatuses = []string{
@@ -44,10 +85,29 @@ func loadAuditEntries(filename string) ([]auditEntry, error) {
 		return nil, err
 	}
 	var entries []auditEntry
-	if err := json.Unmarshal(data, &entries); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&entries); err != nil {
 		return nil, fmt.Errorf("decode %s: %w", filename, err)
 	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return nil, fmt.Errorf("decode %s: trailing JSON value", filename)
+	}
 	return entries, nil
+}
+
+func decodeContract(data []byte, target *contractCatalog) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return fmt.Errorf("trailing JSON value")
+	}
+	return nil
 }
 
 func auditCatalog(name string, entries []auditEntry) []string {
@@ -102,16 +162,55 @@ func auditCatalog(name string, entries []auditEntry) []string {
 	return problems
 }
 
+func catalogTestFunctions(t *testing.T) map[string]struct{} {
+	t.Helper()
+	result := make(map[string]struct{})
+	files, err := filepath.Glob("*_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := gotoken.NewFileSet()
+	for _, filename := range files {
+		file, parseErr := parser.ParseFile(set, filename, nil, 0)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if ok && function.Recv == nil && strings.HasPrefix(function.Name.Name, "Test") {
+				result[function.Name.Name] = struct{}{}
+				ast.Inspect(function.Body, func(node ast.Node) bool {
+					call, ok := node.(*ast.CallExpr)
+					if !ok || len(call.Args) == 0 {
+						return true
+					}
+					selector, ok := call.Fun.(*ast.SelectorExpr)
+					name, okName := call.Args[0].(*ast.BasicLit)
+					if !ok || !okName || selector.Sel.Name != "Run" || name.Kind != gotoken.STRING {
+						return true
+					}
+					subtest, unquoteErr := strconv.Unquote(name.Value)
+					if unquoteErr == nil {
+						result[function.Name.Name+"/"+subtest] = struct{}{}
+					}
+					return true
+				})
+			}
+		}
+	}
+	return result
+}
+
 func TestSpecificationCatalogAudit(t *testing.T) {
 	data, err := os.ReadFile("testdata/spec/contract.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var contract contractCatalog
-	if err := json.Unmarshal(data, &contract); err != nil {
+	if err := decodeContract(data, &contract); err != nil {
 		t.Fatal(err)
 	}
-	if contract.ModelVersion == "" || len(contract.Baselines) != 2 || len(contract.Input) == 0 || len(contract.Observable) == 0 {
+	if contract.ModelVersion == "" || len(contract.Baselines) != 2 || !contract.Input.ArbitraryBytes || contract.Observable.ChildOrdering == "" || contract.Input.MaxFixedPointIterations <= 0 {
 		t.Fatalf("incomplete normative contract: %#v", contract)
 	}
 	for _, status := range allowedBehaviorStatuses {
@@ -136,6 +235,27 @@ func TestSpecificationCatalogAudit(t *testing.T) {
 		if problems := auditCatalog(item.kind, entries); len(problems) != 0 {
 			t.Fatalf("%s audit:\n%s", item.file, strings.Join(problems, "\n"))
 		}
+		knownTests := catalogTestFunctions(t)
+		for _, entry := range entries {
+			for _, mapping := range entry.Tests {
+				if _, ok := knownTests[mapping]; !ok {
+					t.Errorf("%s %s maps to missing test %s", item.file, entry.ID, mapping)
+				}
+			}
+		}
+	}
+}
+
+func TestSpecificationCatalogRejectsUnknownFields(t *testing.T) {
+	var entries []auditEntry
+	decoder := json.NewDecoder(strings.NewReader(`[{"id":"x","status":"required","reference":"r","tests":["TestX"],"mystery":true}]`))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&entries); err == nil {
+		t.Fatal("unknown catalog field accepted")
+	}
+	var contract contractCatalog
+	if err := decodeContract([]byte(`{"modelVersion":"v","baselines":[],"configurations":[],"statuses":{},"input":{},"observable":{},"mystery":true}`), &contract); err == nil {
+		t.Fatal("unknown contract field accepted")
 	}
 }
 
@@ -193,6 +313,23 @@ func TestNotApplicableCatalogRationale(t *testing.T) {
 			t.Fatalf("%s has no rationale", entry.ID)
 		}
 	}
+}
+
+func TestUnsupportedFixedPointCatalogIsExplicit(t *testing.T) {
+	entries, err := loadAuditEntries("testdata/spec/semantics.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.ID != "semantic.fixed-point" {
+			continue
+		}
+		if entry.Status != "unsupported" || !strings.Contains(entry.Rationale, "CFG") {
+			t.Fatalf("fixed-point capability is not honestly classified: %#v", entry)
+		}
+		return
+	}
+	t.Fatal("semantic.fixed-point entry is missing")
 }
 
 func TestHostIndependenceContract(t *testing.T) {

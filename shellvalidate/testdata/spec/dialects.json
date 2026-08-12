@@ -1,7 +1,7 @@
 [
-  {"id":"dialect.posix","status":"required","reference":"POSIX.1-2024 Shell Command Language","accepted":["posix-core"],"rejected":["bash-only-operators","bash-only-reserved-words","process-substitution"],"tests":["TestDialectInteractionModel"]},
-  {"id":"dialect.bash","status":"extension","reference":"Bash 5.3 Shell Syntax","accepted":["posix-core","bash-only-operators","bash-only-reserved-words","process-substitution"],"tests":["TestDialectInteractionModel"]},
-  {"id":"dialect.auto","status":"implementation-defined","reference":"package dialect contract","choice":"Recognized first-line sh or bash interpreter; POSIX fallback.","accepted":["shebang-sh","shebang-bash","fallback-posix"],"tests":["TestAutoDialectAndImmutability","TestAutoDialectModel"]},
+  {"id":"dialect.posix","status":"required","reference":"POSIX.1-2024 Shell Command Language","accepted":["posix-core"],"rejected":["bash-only-operators","bash-only-reserved-words","process-substitution"],"tests":["TestCorpusBehavior"]},
+  {"id":"dialect.bash","status":"extension","reference":"Bash 5.3 Shell Syntax","accepted":["posix-core","bash-only-operators","bash-only-reserved-words","process-substitution"],"tests":["TestCorpusBehavior"]},
+  {"id":"dialect.auto","status":"implementation-defined","reference":"package dialect contract","choice":"Recognized first-line sh or bash interpreter; POSIX fallback.","accepted":["shebang-sh","shebang-bash","fallback-posix"],"tests":["TestAutoDialectAndImmutability"]},
   {"id":"dialect.bash-posix-mode","status":"unsupported","rationale":"Options does not expose a Bash POSIX-mode configuration.","tests":["TestUnsupportedConfigurationCatalog"]},
   {"id":"dialect.extglob","status":"unsupported","rationale":"Options does not expose parser-relevant Bash shell options.","tests":["TestUnsupportedConfigurationCatalog"]},
   {"id":"dialect.version-gates","status":"unsupported","rationale":"The public contract targets one Bash 5.3 baseline without older-version emulation.","tests":["TestUnsupportedConfigurationCatalog"]}

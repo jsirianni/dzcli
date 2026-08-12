@@ -1,12 +1,12 @@
 [
-  {"id":"robustness.input-size","status":"required","bound":8388608,"boundaries":["N-1","N","N+1"],"tests":["TestResourceLimitBoundaries/input-size"]},
-  {"id":"robustness.nesting","status":"required","bound":256,"boundaries":["N-1","N","N+1"],"tests":["TestResourceLimitBoundaries/nesting"]},
-  {"id":"robustness.diagnostics","status":"required","bound":100,"boundaries":["N-1","N","N+1"],"tests":["TestDiagnosticCapExhaustiveModel"]},
-  {"id":"robustness.source-depth","status":"required","bound":16,"boundaries":["N-1","N","N+1","cycle"],"tests":["TestResolverStateModel"]},
-  {"id":"robustness.invalid-utf8","status":"required","bound":0,"boundaries":["start","word","end"],"tests":["TestByteMutationModel"]},
-  {"id":"robustness.nul","status":"required","bound":0,"boundaries":["start","word","end"],"tests":["TestByteMutationModel"]},
-  {"id":"robustness.recovery-progress","status":"required","bound":0,"boundaries":["unexpected","truncated","multiple-errors"],"tests":["TestRecoveryMutationModel"]},
+  {"id":"robustness.input-size","status":"required","bound":8388608,"boundaries":["N-1","N","N+1"],"tests":["TestSourceSizeLimit"]},
+  {"id":"robustness.nesting","status":"required","bound":256,"boundaries":["N-1","N","N+1"],"tests":["TestNestingSafetyLimit"]},
+  {"id":"robustness.diagnostics","status":"required","bound":100,"boundaries":["N-1","N","N+1"],"tests":["TestDiagnosticOrderingAndCap"]},
+  {"id":"robustness.source-depth","status":"required","bound":16,"boundaries":["N-1","N","N+1","cycle"],"tests":["TestResolverCycleIsBounded"]},
+  {"id":"robustness.invalid-utf8","status":"required","bound":0,"boundaries":["start","word","end"],"tests":["TestPositionsAreByteOriented"]},
+  {"id":"robustness.nul","status":"required","bound":0,"boundaries":["start","word","end"],"tests":["TestNULDiagnosticsAreExactAcrossLexicalContexts"]},
+  {"id":"robustness.recovery-progress","status":"required","bound":0,"boundaries":["unexpected","truncated","multiple-errors"],"tests":["TestRecoveryCollectsIndependentErrors"]},
   {"id":"robustness.cancellation","status":"required","bound":0,"boundaries":["pre-cancelled"],"tests":["TestContextCancellation"]},
-  {"id":"robustness.parallel","status":"required","bound":0,"boundaries":["parse","check"],"tests":["TestDeterministicPropertyCorpus"]},
+  {"id":"robustness.parallel","status":"required","bound":0,"boundaries":["parse","check"],"tests":["TestParseDeterministicAndParallel"]},
   {"id":"robustness.host-independence","status":"required","bound":0,"boundaries":["resolver","filename","locale","environment"],"tests":["TestHostIndependenceContract"]}
 ]

@@ -5,10 +5,10 @@
     {"name": "Bash", "version": "5.3", "section": "Bash Reference Manual"}
   ],
   "configurations": [
-    {"id": "posix", "dialect": "posix", "status": "required", "reference": "POSIX.1-2024 2.1", "tests": ["TestAutoDialectModel"]},
-    {"id": "bash", "dialect": "bash", "status": "extension", "reference": "Bash 5.3 3.1", "tests": ["TestAutoDialectModel"]},
-    {"id": "auto-posix", "dialect": "auto", "status": "implementation-defined", "choice": "Unrecognized or absent interpreter selects POSIX.", "reference": "package contract", "tests": ["TestAutoDialectModel"]},
-    {"id": "auto-bash", "dialect": "auto", "status": "implementation-defined", "choice": "A recognized bash interpreter selects Bash.", "reference": "package contract", "tests": ["TestAutoDialectModel"]}
+    {"id": "posix", "dialect": "posix", "status": "required", "reference": "POSIX.1-2024 2.1", "tests": ["TestCorpusBehavior"]},
+    {"id": "bash", "dialect": "bash", "status": "extension", "reference": "Bash 5.3 3.1", "tests": ["TestCorpusBehavior"]},
+    {"id": "auto-posix", "dialect": "auto", "status": "implementation-defined", "choice": "Unrecognized or absent interpreter selects POSIX.", "reference": "package contract", "tests": ["TestAutoDialectAndImmutability"]},
+    {"id": "auto-bash", "dialect": "auto", "status": "implementation-defined", "choice": "A recognized bash interpreter selects Bash.", "reference": "package contract", "tests": ["TestAutoDialectAndImmutability"]}
   ],
   "input": {
     "arbitraryBytes": true,
@@ -22,7 +22,7 @@
     "defaultMaxDiagnostics": 100,
     "maxSourceDepth": 16,
     "maxRecoveryActions": "bounded by token progress",
-    "maxFixedPointIterations": "not-applicable-no-fixed-point-engine"
+    "maxFixedPointIterations": 32
   },
   "observable": {
     "childOrdering": "source order",
