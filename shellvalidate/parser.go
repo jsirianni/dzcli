@@ -64,7 +64,13 @@ func parseTokens(source *sourceFile, tokens []token, dialect Dialect) ([]Node, [
 				flushCommand(false)
 				frame := frames[len(frames)-1]
 				frames = frames[:len(frames)-1]
-				nodes = append(nodes, Node{kind: frame.kind, span: source.span(frame.start, item.end)})
+				node := Node{kind: frame.kind, span: source.span(frame.start, item.end)}
+				if frame.kind == NodeArithmetic {
+					node.expressions = parseArithmeticExpressions(source, frame.start+2, item.start)
+				} else if frame.kind == NodeConditional {
+					node.expressions = parseConditionalExpressions(source, frame.start+2, item.start)
+				}
+				nodes = append(nodes, node)
 				atCommandStart = false
 				continue
 			}

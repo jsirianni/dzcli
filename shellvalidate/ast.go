@@ -79,11 +79,12 @@ func (word Word) Span() Span { return word.span }
 
 // Node is an immutable shell syntax node.
 type Node struct {
-	kind       NodeKind
-	span       Span
-	words      []Word
-	children   []Node
-	incomplete bool
+	kind        NodeKind
+	span        Span
+	words       []Word
+	children    []Node
+	expressions []Expression
+	incomplete  bool
 }
 
 // Kind returns the node kind.
@@ -98,8 +99,51 @@ func (node Node) Words() []Word { return append([]Word(nil), node.words...) }
 // Children returns independent child-node snapshots.
 func (node Node) Children() []Node { return append([]Node(nil), node.children...) }
 
+// Expressions returns arithmetic or conditional expression snapshots.
+func (node Node) Expressions() []Expression {
+	return append([]Expression(nil), node.expressions...)
+}
+
 // Incomplete reports whether recovery produced this partial node.
 func (node Node) Incomplete() bool { return node.incomplete }
+
+// ExpressionKind identifies an arithmetic or conditional expression form.
+type ExpressionKind uint8
+
+const (
+	ExpressionLiteral ExpressionKind = iota
+	ExpressionName
+	ExpressionUnary
+	ExpressionBinary
+	ExpressionAssignment
+	ExpressionConditional
+)
+
+// Expression is an immutable arithmetic or conditional expression.
+type Expression struct {
+	kind     ExpressionKind
+	operator string
+	value    string
+	span     Span
+	children []Expression
+}
+
+// Kind returns the expression form.
+func (expression Expression) Kind() ExpressionKind { return expression.kind }
+
+// Operator returns the expression operator, if any.
+func (expression Expression) Operator() string { return expression.operator }
+
+// Value returns a literal or variable spelling, if any.
+func (expression Expression) Value() string { return expression.value }
+
+// Span returns the expression source range.
+func (expression Expression) Span() Span { return expression.span }
+
+// Children returns independent operand snapshots.
+func (expression Expression) Children() []Expression {
+	return append([]Expression(nil), expression.children...)
+}
 
 // Comment describes a preserved source comment.
 type Comment struct {
