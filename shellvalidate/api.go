@@ -165,7 +165,11 @@ func Analyze(ctx context.Context, file *File, options Options) ([]Diagnostic, bo
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
-	return nil, true, nil
+	state := &analysisState{visited: make(map[string]struct{})}
+	if file.filename != "" {
+		state.visited[file.filename] = struct{}{}
+	}
+	return runAnalysis(ctx, file, options, state)
 }
 
 // Check parses and analyzes one source buffer.
@@ -187,7 +191,9 @@ func Check(ctx context.Context, filename string, source []byte, options Options)
 	if err != nil {
 		return Result{}, err
 	}
-	diagnostics := append(append([]Diagnostic(nil), parseDiagnostics...), analysisDiagnostics...)
+	categories := enabledCategories(options)
+	diagnostics := filterDiagnostics(parseDiagnostics, categories)
+	diagnostics = append(diagnostics, analysisDiagnostics...)
 	sortDiagnostics(diagnostics)
 	limit := diagnosticLimit(options.MaxDiagnostics)
 	if len(diagnostics) > limit {
@@ -201,6 +207,16 @@ func Check(ctx context.Context, filename string, source []byte, options Options)
 		}
 	}
 	return Result{File: file, Diagnostics: diagnostics, SyntaxValid: file.syntaxValid, Valid: valid, AnalysisExact: exact}, nil
+}
+
+func filterDiagnostics(items []Diagnostic, categories map[string]bool) []Diagnostic {
+	result := make([]Diagnostic, 0, len(items))
+	for _, item := range items {
+		if categories[categoryForCode(item.Code)] {
+			result = append(result, item)
+		}
+	}
+	return result
 }
 
 func validDialect(dialect Dialect) bool {
