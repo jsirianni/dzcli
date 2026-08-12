@@ -1,0 +1,1 @@
+{"id":"posix.syntax.heredoc","dialect":"posix","phase":"parse","classification":"minimal-valid","features":["posix.heredoc","common.redirection"],"rules":[],"expected":{"syntaxValid":true,"valid":true,"analysisExact":true,"diagnostics":[]},"references":[{"source":"POSIX.1-2024","section":"2.7.4 Here-Document"}],"tags":["quoted-delimiter"]}

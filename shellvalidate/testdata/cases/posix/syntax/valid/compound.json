@@ -1,0 +1,1 @@
+{"id":"posix.syntax.compound","dialect":"posix","phase":"parse","classification":"nested-valid","features":["posix.compound"],"rules":[],"expected":{"syntaxValid":true,"valid":true,"analysisExact":true,"diagnostics":[]},"references":[{"source":"POSIX.1-2024","section":"2.9.4 Compound Commands"}],"tags":["nested"]}

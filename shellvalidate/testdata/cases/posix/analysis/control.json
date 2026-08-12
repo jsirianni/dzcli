@@ -1,0 +1,1 @@
+{"id":"posix.analysis.control","dialect":"posix","phase":"analyze","classification":"minimal-invalid","features":["posix.commands"],"rules":["SHC1001","SHC1002"],"expected":{"syntaxValid":true,"valid":false,"analysisExact":true,"diagnostics":[{"code":"SHC1001"},{"code":"SHC1002"}]},"references":[{"source":"POSIX.1-2024","section":"break and return"}],"tags":["control"]}

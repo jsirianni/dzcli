@@ -1,0 +1,1 @@
+{"id":"posix.syntax.missing-fi","dialect":"posix","phase":"parse","classification":"nested-invalid","features":["posix.compound","recovery.structural"],"rules":[],"expected":{"syntaxValid":false,"valid":false,"analysisExact":true,"diagnostics":[{"code":"SHS1004"}]},"references":[{"source":"POSIX.1-2024","section":"2.9.4.4 if"}],"tags":["recovery"]}

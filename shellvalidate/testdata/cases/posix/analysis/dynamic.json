@@ -1,0 +1,1 @@
+{"id":"posix.analysis.dynamic","dialect":"posix","phase":"analyze","classification":"minimal-invalid","features":["posix.commands"],"rules":["SHX1001","SHI1001"],"expected":{"syntaxValid":true,"valid":true,"analysisExact":false,"diagnostics":[{"code":"SHX1001"},{"code":"SHI1001"}]},"references":[{"source":"POSIX.1-2024","section":"eval and dot"}],"tags":["dynamic"]}
