@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "seeds": [
+    {"id":"seed-empty","feature":"lex.input.bytes","hex":""},
+    {"id":"seed-simple-command","feature":"grammar.simple-command","hex":"6563686f206f6b0a"},
+    {"id":"seed-compound-if","feature":"grammar.if","hex":"696620747275653b207468656e206563686f207965733b2066690a"},
+    {"id":"seed-heredoc","feature":"lex.heredoc","hex":"636174203c3c454f460a626f64790a454f460a"},
+    {"id":"seed-conditional","feature":"grammar.conditional-command","hex":"5b5b202478203d7e205e61205d5d0a"},
+    {"id":"seed-arithmetic-loop","feature":"grammar.arithmetic-command","hex":"666f72202828693d303b693c333b692b2b29293b20646f203a3b20646f6e650a"},
+    {"id":"seed-invalid-utf8","feature":"lex.input.bytes","hex":"ff0a"}
+  ],
+  "regressions": [
+    {
+      "id": "regression-nul-heredoc-body-once",
+      "obligationIds": ["common.input", "posix.heredoc"],
+      "dialect": "posix",
+      "hex": "636174203c3c454f460a7800790a454f460a",
+      "expected": {"diagnostics": [{"code":"SHS1003","startOffset":11,"endOffset":12}]}
+    }
+  ]
+}
