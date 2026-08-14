@@ -1,0 +1,1 @@
+{"id":"bash.syntax.redirection","dialect":"bash","phase":"parse","classification":"minimal-valid","features":["bash.redirection"],"rules":[],"expected":{"syntaxValid":true,"valid":true,"analysisExact":true,"diagnostics":[]},"references":[{"source":"Bash Reference Manual 5.3","section":"3.6 Redirections"}],"tags":["here-string","process-substitution"]}

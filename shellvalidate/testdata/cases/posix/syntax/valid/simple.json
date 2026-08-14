@@ -1,0 +1,1 @@
+{"id":"posix.syntax.simple","dialect":"posix","phase":"parse","classification":"minimal-valid","features":["common.input","common.quoting","common.expansion","posix.commands"],"rules":[],"expected":{"syntaxValid":true,"valid":true,"analysisExact":true,"diagnostics":[]},"references":[{"source":"POSIX.1-2024","section":"2.9.1 Simple Commands"}],"tags":["shebang"]}

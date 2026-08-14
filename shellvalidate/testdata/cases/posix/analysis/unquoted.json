@@ -1,0 +1,1 @@
+{"id":"posix.analysis.unquoted","dialect":"posix","phase":"analyze","classification":"minimal-invalid","features":["common.expansion"],"rules":["SHE1001"],"expected":{"syntaxValid":true,"valid":true,"analysisExact":true,"diagnostics":[{"code":"SHE1001"}]},"references":[{"source":"POSIX.1-2024","section":"2.6 Word Expansions"}],"tags":["quoting"]}

@@ -1,0 +1,15 @@
+[
+  {"id":"common.input","kind":"lexical","dialects":["posix","bash"],"references":[{"source":"POSIX.1-2024","section":"2.3 Token Recognition"}],"requirements":{"minimalValid":1,"minimalInvalid":1}},
+  {"id":"common.quoting","kind":"lexical","dialects":["posix","bash"],"references":[{"source":"POSIX.1-2024","section":"2.2 Quoting"}],"requirements":{"minimalValid":1,"minimalInvalid":1}},
+  {"id":"common.expansion","kind":"grammar","dialects":["posix","bash"],"references":[{"source":"POSIX.1-2024","section":"2.6 Word Expansions"}],"requirements":{"minimalValid":1,"minimalInvalid":1}},
+  {"id":"common.redirection","kind":"grammar","dialects":["posix","bash"],"references":[{"source":"POSIX.1-2024","section":"2.7 Redirection"}],"requirements":{"minimalValid":1,"minimalInvalid":1}},
+  {"id":"posix.commands","kind":"grammar","dialects":["posix","bash"],"references":[{"source":"POSIX.1-2024","section":"2.9 Shell Commands"}],"requirements":{"minimalValid":1,"minimalInvalid":1}},
+  {"id":"posix.compound","kind":"grammar","dialects":["posix","bash"],"references":[{"source":"POSIX.1-2024","section":"2.9.4 Compound Commands"}],"requirements":{"nestedValid":1,"nestedInvalid":1}},
+  {"id":"posix.heredoc","kind":"grammar","dialects":["posix","bash"],"references":[{"source":"POSIX.1-2024","section":"2.7.4 Here-Document"}],"requirements":{"minimalValid":1,"minimalInvalid":1}},
+  {"id":"bash.commands","kind":"grammar","dialects":["bash"],"references":[{"source":"Bash Reference Manual 5.3","section":"3.2 Shell Commands"}],"requirements":{"minimalValid":1,"dialectContrast":1}},
+  {"id":"bash.expansion","kind":"grammar","dialects":["bash"],"references":[{"source":"Bash Reference Manual 5.3","section":"3.5 Shell Expansions"}],"requirements":{"minimalValid":1,"dialectContrast":1}},
+  {"id":"bash.redirection","kind":"grammar","dialects":["bash"],"references":[{"source":"Bash Reference Manual 5.3","section":"3.6 Redirections"}],"requirements":{"minimalValid":1,"dialectContrast":1}},
+  {"id":"bash.conditional","kind":"grammar","dialects":["bash"],"references":[{"source":"Bash Reference Manual 5.3","section":"3.2.5.2 Conditional Constructs"}],"requirements":{"minimalValid":1,"dialectContrast":1}},
+  {"id":"bash.arithmetic","kind":"grammar","dialects":["bash"],"references":[{"source":"Bash Reference Manual 5.3","section":"6.5 Shell Arithmetic"}],"requirements":{"minimalValid":1,"dialectContrast":1}},
+  {"id":"recovery.structural","kind":"recovery","dialects":["posix","bash"],"references":[{"source":"independent-derived-case","section":"parser recovery contract"}],"requirements":{"nestedInvalid":1,"dialectContrast":1}}
+]

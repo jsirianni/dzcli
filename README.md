@@ -4,6 +4,10 @@
 
 It works with server config, gameplay config, weather config, economy XML, DayZ init scripts, and Expansion AI files.
 
+The module also exposes the independent `dzcli/shellvalidate` Go package,
+targeting cataloged POSIX.1-2024 shell and Bash 5.3 syntax and static checks.
+The package is not connected to a `dzcli` command.
+
 ## Documentation
 
 - [Usage docs](docs/README.md)
