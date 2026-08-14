@@ -1,0 +1,46 @@
+{
+  "modelVersion": "shellvalidate-test-model-v1",
+  "baselines": [
+    {"name": "POSIX.1-2024", "section": "Shell Command Language"},
+    {"name": "Bash", "version": "5.3", "section": "Bash Reference Manual"}
+  ],
+  "configurations": [
+    {"id": "posix", "dialect": "posix", "status": "required", "reference": "POSIX.1-2024 2.1", "tests": ["TestCorpusBehavior"]},
+    {"id": "bash", "dialect": "bash", "status": "extension", "reference": "Bash 5.3 3.1", "tests": ["TestCorpusBehavior"]},
+    {"id": "auto-posix", "dialect": "auto", "status": "implementation-defined", "choice": "Unrecognized or absent interpreter selects POSIX.", "reference": "package contract", "tests": ["TestAutoDialectAndImmutability"]},
+    {"id": "auto-bash", "dialect": "auto", "status": "implementation-defined", "choice": "A recognized bash interpreter selects Bash.", "reference": "package contract", "tests": ["TestAutoDialectAndImmutability"]}
+  ],
+  "input": {
+    "arbitraryBytes": true,
+    "invalidUTF8": "preserve",
+    "nul": "diagnostic-SHS1003",
+    "lineEndings": ["LF", "CRLF", "no-final-newline"],
+    "positions": "byte offsets with one-based line and byte column",
+    "spans": "half-open",
+    "maxSourceBytes": 8388608,
+    "maxNesting": 256,
+    "defaultMaxDiagnostics": 100,
+    "maxSourceDepth": 16,
+    "maxRecoveryActions": "bounded by token progress",
+    "maxFixedPointIterations": 32
+  },
+  "observable": {
+    "childOrdering": "source order",
+    "diagnosticOrdering": ["start-offset", "end-offset", "severity", "code"],
+    "incompleteNodes": "Incomplete returns true",
+    "dynamicUnknown": "AnalysisExact is false and SHI1001 is emitted when material",
+    "resourceLimits": "stable diagnostic or inexact result without panic",
+    "parallelSafety": "equivalent inputs produce equivalent immutable results"
+  },
+  "statuses": {
+    "required": "Exact accepted or rejected result, structure, and diagnostics.",
+    "extension": "Exact behavior with dialect restrictions.",
+    "implementation-defined": "Exact documented package choice.",
+    "unspecified": "Stable unspecified classification without runtime certainty.",
+    "undefined": "Stable diagnostic or classification without runtime guarantee.",
+    "unsupported": "Stable unsupported result without panic or misleading cascades.",
+    "dynamic-unknown": "Stable incomplete-analysis result.",
+    "not-applicable": "Audited rationale for no case.",
+    "unimplemented": "Forbidden in a release catalog."
+  }
+}

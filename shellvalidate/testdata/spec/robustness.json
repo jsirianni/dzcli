@@ -1,0 +1,12 @@
+[
+  {"id":"robustness.input-size","status":"required","reference":"package safety-limit contract","bound":8388608,"boundaries":["N-1","N","N+1"],"tests":["TestSourceSizeLimit"]},
+  {"id":"robustness.nesting","status":"required","reference":"package safety-limit contract","bound":256,"boundaries":["N-1","N","N+1"],"tests":["TestNestingSafetyLimit"]},
+  {"id":"robustness.diagnostics","status":"required","reference":"package diagnostic-limit contract","bound":100,"boundaries":["N-1","N","N+1"],"tests":["TestDiagnosticOrderingAndCap"]},
+  {"id":"robustness.source-depth","status":"required","reference":"package recursive-analysis contract","bound":16,"boundaries":["N-1","N","N+1","cycle"],"tests":["TestResolverCycleIsBounded"]},
+  {"id":"robustness.invalid-utf8","status":"required","reference":"package byte-input contract","bound":0,"boundaries":["start","word","end"],"tests":["TestPositionsAreByteOriented"]},
+  {"id":"robustness.nul","status":"required","reference":"package byte-input contract","bound":0,"boundaries":["start","word","end"],"tests":["TestNULDiagnosticsAreExactAcrossLexicalContexts"]},
+  {"id":"robustness.recovery-progress","status":"required","reference":"package parser-recovery contract","bound":0,"boundaries":["unexpected","truncated","multiple-errors"],"tests":["TestRecoveryCollectsIndependentErrors"]},
+  {"id":"robustness.cancellation","status":"required","reference":"package context contract","bound":0,"boundaries":["pre-cancelled"],"tests":["TestContextCancellation"]},
+  {"id":"robustness.parallel","status":"required","reference":"package immutability contract","bound":0,"boundaries":["parse","check"],"tests":["TestParseDeterministicAndParallel"]},
+  {"id":"robustness.host-independence","status":"required","reference":"package resolver-identity contract","bound":0,"boundaries":["resolver","filename","locale","environment"],"tests":["TestHostIndependenceContract","TestResolverFilenamesAreOpaqueCanonicalIdentities"]}
+]

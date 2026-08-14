@@ -1,0 +1,12 @@
+[
+  {"id":"semantic.symbols","status":"required","reference":"package abstract-state contract","states":["unassigned","maybe-assigned","assigned-unknown","assigned-constant"],"tests":["TestAssignmentOrderingAndCommandArguments","TestDataflowControlFlowJoins"]},
+  {"id":"semantic.nounset","status":"required","reference":"package option-state contract","states":["off","maybe","on"],"tests":["TestDataflowNounsetTriState"]},
+  {"id":"semantic.expansion","status":"required","reference":"POSIX.1-2024 2.6","states":["quoted","unquoted","safe","unknown"],"tests":["TestAnalysisRuleFamilies"]},
+  {"id":"semantic.pipeline","status":"implementation-defined","reference":"package execution-context contract","choice":"Pipeline read assignment is treated as not visible to the parent.","states":["parent","pipeline","subshell","function"],"tests":["TestDataflowExecutionContexts"]},
+  {"id":"semantic.control","status":"required","reference":"POSIX.1-2024 2.9","states":["top-level","loop","source"],"tests":["TestControlDiagnosticsUseASTScope"]},
+  {"id":"semantic.redirection-order","status":"required","reference":"POSIX.1-2024 2.7","states":["combined","split"],"tests":["TestRedirectionAnalysisUsesASTOwnership"]},
+  {"id":"semantic.command-model","status":"required","reference":"package command-model contract","states":["modeled","unmodeled"],"tests":["TestAnalysisRuleFamilies"]},
+  {"id":"semantic.literal-eval","status":"required","reference":"package recursive-analysis contract","states":["static","dynamic"],"tests":["TestSourceResolverAndLiteralEval","TestDynamicAnalysisIsInexact"]},
+  {"id":"semantic.source","status":"dynamic-unknown","rationale":"Only resolver-returned static names are recursively analyzed; unresolved, cyclic, and depth-limited sources make analysis inexact.","states":["exact","inexact","disabled","resolved","dynamic","cycle","depth-limit"],"tests":["TestSourceUncertaintyPropagates","TestResolverCycleIsBounded"]},
+  {"id":"semantic.fixed-point","status":"required","reference":"package finite dataflow-lattice contract","states":["entry","branch","join","iteration","stable"],"tests":["TestDataflowControlFlowJoins","TestDataflowExecutionContexts"]}
+]
