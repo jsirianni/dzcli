@@ -25,6 +25,12 @@ unknown command substitutions, runtime-generated names, aliases, and unknown
 external behavior can make `Result.AnalysisExact` false. The package reports
 that uncertainty instead of claiming a complete analysis.
 
+Variable assignment and `nounset` option state use a finite dataflow lattice.
+Branches are joined conservatively, loops iterate to a bounded fixed point,
+and subshell, pipeline, and function contexts do not leak assignments into the
+parent shell. A value assigned on only some paths is reported with likely
+rather than definite confidence.
+
 The parser preserves command, pipeline, compound-command, expression,
 redirection, and here-document structure. The analyzer implements the
 diagnostic families listed in `COVERAGE.md`; it is not a proof that every
@@ -39,3 +45,13 @@ nesting, and 16 recursive literal `eval` or sourced-file analyses.
 Production code uses only the Go standard library and supports
 `CGO_ENABLED=0`. Normal package operation and tests do not invoke external
 programs or access the network.
+
+## Test model
+
+The deterministic conformance suite is documented in [TESTING.md](TESTING.md).
+It provides machine-audited traceability, explicitly bounded local-domain
+enumeration, interaction coverage, input mutation, fuzz-regression replay, and
+real deterministic source mutation. “Exhaustive” is limited to a named finite
+local domain and does not mean enumeration of every possible shell script.
+Deep CI enforces a 90.0% package statement-coverage floor and publishes runtime
+evidence; `COVERAGE.md` records expectations rather than observed CI results.
