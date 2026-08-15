@@ -65,7 +65,7 @@ jobs:
 
       - name: Upload coverage profile
         if: ${{ always() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: shellvalidate-coverage-${{ github.sha }}
           path: artifacts/shellvalidate.coverprofile
@@ -73,7 +73,7 @@ jobs:
 
       - name: Upload mutation results and logs
         if: ${{ always() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: shellvalidate-mutation-${{ github.sha }}
           path: artifacts/shellvalidate-mutation
@@ -81,7 +81,7 @@ jobs:
 
       - name: Upload runtime evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: shellvalidate-evidence-${{ github.sha }}
           path: artifacts/shellvalidate-evidence
