@@ -156,6 +156,41 @@ func TestRunJSONXMLValidationRejectsNonXMLFile(t *testing.T) {
 	assertContains(t, failure["message"].(string), "is not an XML file")
 }
 
+func TestRunBatchValidationReportsIncompleteAnalysisWithoutFailing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "service.cmd")
+	if err := os.WriteFile(path, []byte("vendor-tool.exe --flag\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"validate", "batch", path}, &stdout, &stderr)
+
+	assertEqual(t, code, SuccessExitCode)
+	assertEqual(t, stderr.String(), "")
+	assertContains(t, stdout.String(), "ok (analysis incomplete)")
+	assertContains(t, stdout.String(), "notice: analysis incomplete")
+}
+
+func TestRunJSONBatchValidationReportsProvenFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "service.bat")
+	if err := os.WriteFile(path, []byte("goto missing\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"--output", "json", "validate", "batch", path}, &stdout, &stderr)
+
+	assertEqual(t, code, FailureExitCode)
+	assertEqual(t, stderr.String(), "")
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	assertEqual(t, envelope["status"].(string), "failed")
+	failure := jsonObject(t, jsonArray(t, envelope["failures"])[0])
+	assertEqual(t, failure["code"].(string), "BAT6002")
+	assertEqual(t, failure["severity"].(string), "error")
+}
+
 func TestRunJSONCommandErrorWritesFailureEnvelope(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

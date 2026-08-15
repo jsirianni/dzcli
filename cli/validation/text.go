@@ -26,6 +26,7 @@ type TextStatus struct {
 	Path     string
 	Summary  string
 	Err      error
+	Notices  []string
 	Warnings []TextWarning
 }
 
@@ -85,11 +86,18 @@ func RenderTextStatuses(stdout io.Writer, statuses []TextStatus, options TextOpt
 			fmt.Fprintf(stdout, "%s %s ok\n", status.Kind, status.Path)
 		}
 		printTextWarnings(stdout, status, groups, printedGroups)
+		printTextNotices(stdout, status)
 	}
 	if !allOK {
 		return ErrFailed
 	}
 	return nil
+}
+
+func printTextNotices(stdout io.Writer, status TextStatus) {
+	for _, notice := range status.Notices {
+		fmt.Fprintf(stdout, "%s %s notice: %s\n", status.Kind, status.Path, notice)
+	}
 }
 
 type warningGroup struct {

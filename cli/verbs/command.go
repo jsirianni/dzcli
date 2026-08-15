@@ -10,6 +10,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	batchvalidate "dzcli/cli/batch/validate"
 	initvalidate "dzcli/cli/dayzinit/validate"
 	economyfixcmd "dzcli/cli/economy/fix"
 	"dzcli/cli/economy/limits"
@@ -83,7 +84,7 @@ func NewFixCommand(stdout io.Writer) *cobra.Command {
 
 func NewValidateCommand(stdout io.Writer) *cobra.Command {
 	var warningMode string
-	command := newParent("validate", "Validate DayZ configuration files")
+	command := newParent("validate", "Validate DayZ configuration and service files")
 	command.SetOut(stdout)
 	validation.AddWarningModeFlag(command, &warningMode)
 	command.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
@@ -93,6 +94,7 @@ func NewValidateCommand(stdout io.Writer) *cobra.Command {
 		return validation.ValidateWarningMode(cmd)
 	}
 	command.AddCommand(initvalidate.NewCommand(stdout))
+	command.AddCommand(batchvalidate.NewCommand(stdout))
 	command.AddCommand(repovalidate.NewCommand(stdout))
 	command.AddCommand(serverconfigcmd.NewValidateCommand(stdout))
 	command.AddCommand(servergameplaycmd.NewValidateCommand(stdout))

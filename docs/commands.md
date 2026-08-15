@@ -21,7 +21,7 @@ dzcli
 | `fix` | Plan or apply DayZ configuration remediation |
 | `get` | List DayZ configuration resources |
 | `update` | Update DayZ configuration resources |
-| `validate` | Validate DayZ configuration files |
+| `validate` | Validate DayZ configuration and service files |
 | `version` | Print dzcli version |
 
 ### Flags
@@ -1721,7 +1721,7 @@ dzcli update server <field> [flags]
 
 ## dzcli validate
 
-Validate DayZ configuration files
+Validate DayZ configuration and service files
 
 ### Usage
 
@@ -1734,6 +1734,7 @@ dzcli validate
 | Command | Description |
 | --- | --- |
 | `all` | Validate a repository or servers root |
+| `batch` | Validate Windows batch files |
 | `economy` | Validate central economy files |
 | `expansion` | Validate DayZ Expansion mod configuration |
 | `gameplay` | Validate cfggameplay.json |
@@ -1758,7 +1759,7 @@ dzcli validate
 
 Validate a repository or servers root
 
-Validate all DayZ server configuration discovered under a repository or servers root. The command discovers server roots, mission roots, serverDZ.cfg, mission gameplay/weather/init files, central economy folders with cfgeconomycore.xml, Expansion AI roots, and XML trees. Mission folders without cfgeconomycore.xml skip economy validation while still participating in XML validation.
+Validate all DayZ server configuration discovered under a repository or servers root. The command discovers server roots, mission roots, serverDZ.cfg, mission gameplay/weather/init files, central economy folders with cfgeconomycore.xml, Expansion AI roots, XML trees, and Windows batch files under server roots. Mission folders without cfgeconomycore.xml skip economy validation while still participating in XML validation.
 
 ### Usage
 
@@ -1772,6 +1773,25 @@ dzcli validate all <repo-or-servers-root>
 dzcli validate all ./servers
 dzcli validate repo ./dayz-configs
 dzcli --output json validate all ./servers
+```
+
+### Inherited Flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--warnings` | `compact` | warning output: compact or full |
+| `-o, --output` | `text` | output format: text or json |
+
+## dzcli validate batch
+
+Validate Windows batch files
+
+Validate one .bat or .cmd file, or discover Windows batch files recursively under a directory, without executing them.
+
+### Usage
+
+```text
+dzcli validate batch <file-or-dir>
 ```
 
 ### Inherited Flags

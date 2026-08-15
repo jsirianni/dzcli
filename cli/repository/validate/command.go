@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	batchvalidate "dzcli/cli/batch/validate"
 	economyvalidate "dzcli/cli/economy/validate"
 	aivalidate "dzcli/cli/expansion/ai/validate"
 	"dzcli/cli/output"
@@ -28,6 +29,7 @@ type repositoryResult struct {
 	targetPath   string
 	textStatuses []validation.TextStatus
 	files        []output.ValidationFile
+	batchPaths   map[string]bool
 }
 
 // NewCommand returns the repository-wide validation command.
@@ -39,7 +41,7 @@ func NewCommand(stdout io.Writer) *cobra.Command {
 		Long: strings.Join([]string{
 			"Validate all DayZ server configuration discovered under a repository or servers root.",
 			"The command discovers server roots, mission roots, serverDZ.cfg, mission gameplay/weather/init files,",
-			"central economy folders with cfgeconomycore.xml, Expansion AI roots, and XML trees.",
+			"central economy folders with cfgeconomycore.xml, Expansion AI roots, XML trees, and Windows batch files under server roots.",
 			"Mission folders without cfgeconomycore.xml skip economy validation while still participating in XML validation.",
 		}, " "),
 		Example: strings.Join([]string{
@@ -123,6 +125,7 @@ func (result *repositoryResult) addServerRoot(serverRoot string) {
 		result.addExpansionAI(serverRoot)
 	}
 	result.addXMLTree(serverRoot)
+	result.addBatchTree(serverRoot)
 }
 
 func (result *repositoryResult) addMissionRoot(missionRoot string) {
@@ -179,6 +182,28 @@ func (result *repositoryResult) addXMLTree(serverRoot string) {
 		result.files = append(result.files, output.SimpleValidationFile(status.Kind, status.Path, "", status.Err))
 	}
 	result.textStatuses = append(result.textStatuses, xmlvalidate.TextStatuses(statuses)...)
+}
+
+func (result *repositoryResult) addBatchTree(serverRoot string) {
+	statuses, err := batchvalidate.InspectBatchPath(serverRoot)
+	if err != nil {
+		result.addSimple("batch", serverRoot, "", err)
+		return
+	}
+	if result.batchPaths == nil {
+		result.batchPaths = make(map[string]bool)
+	}
+	unique := make([]batchvalidate.FileStatus, 0, len(statuses))
+	for _, status := range statuses {
+		path := filepath.Clean(status.Path)
+		if result.batchPaths[path] {
+			continue
+		}
+		result.batchPaths[path] = true
+		unique = append(unique, status)
+	}
+	result.textStatuses = append(result.textStatuses, batchvalidate.TextStatuses(unique)...)
+	result.files = append(result.files, batchvalidate.ValidationFiles(unique)...)
 }
 
 func (result *repositoryResult) addSimple(kind string, path string, summary string, err error) {
