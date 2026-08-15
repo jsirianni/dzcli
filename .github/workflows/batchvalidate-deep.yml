@@ -1,0 +1,68 @@
+name: Batch validator deep tests
+
+on:
+  pull_request:
+    paths:
+      - "internal/batchvalidate/**"
+      - ".github/workflows/batchvalidate-deep.yml"
+      - "go.mod"
+      - "go.sum"
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deep:
+    name: pure-go-race-coverage-fuzz
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test without cgo
+        env:
+          CGO_ENABLED: "0"
+        run: go test ./internal/batchvalidate/...
+
+      - name: Run race suite
+        run: go test -race ./internal/batchvalidate/...
+
+      - name: Enforce 100 percent statement coverage
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          go test ./internal/batchvalidate/... -covermode=atomic -coverprofile=artifacts/batchvalidate.coverprofile
+          total="$(go tool cover -func=artifacts/batchvalidate.coverprofile | awk '/^total:/ {print $3}')"
+          test "$total" = "100.0%"
+
+      - name: Fuzz every target
+        if: ${{ github.event_name != 'pull_request' }}
+        shell: bash
+        run: |
+          for target in \
+            FuzzValidateNeverPanics \
+            FuzzScannerMakesProgress \
+            FuzzParserSpans \
+            FuzzDeterministicDiagnostics \
+            FuzzNoInvalidUTF8Assumption
+          do
+            go test ./internal/batchvalidate -run '^$' -fuzz "^${target}$" -fuzztime=20s
+          done
+
+      - name: Upload coverage profile
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: batchvalidate-coverage-${{ github.sha }}
+          path: artifacts/batchvalidate.coverprofile
+          if-no-files-found: warn

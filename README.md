@@ -42,7 +42,7 @@ dzcli --output json validate economy ./mpmissions/dayzOffline.chernarusplus
 dzcli -o json get server --file ./serverDZ.cfg
 ```
 
-Every JSON envelope includes `status`, `target_path`, `warnings`, `failures`, `remediation`, and `data`. Validation commands put per-file results in `data.files`; `get` commands put rows in `data.rows`; mutation dry-runs put generated content under `data.content` with `dry_run: true`.
+Every JSON envelope includes `status`, `target_path`, `warnings`, `failures`, `remediation`, and `data`. Validation output may also include nonfatal `notices` with source codes and spans when analysis is intentionally incomplete. Validation commands put per-file results in `data.files`; `get` commands put rows in `data.rows`; mutation dry-runs put generated content under `data.content` with `dry_run: true`.
 
 Validation output compacts repeated similar warnings once a group reaches three items. Compact JSON warnings include a `group` object with `key`, `title`, `count`, example `items`, and `omitted_items` when more examples are hidden. Use `--warnings full` with any `validate` command to print or emit every warning and remediation item individually.
 
@@ -53,7 +53,16 @@ dzcli validate all ./servers
 dzcli --output json validate all ./servers
 ```
 
-Repository-wide validation discovers server roots, `serverDZ.cfg`, mission gameplay/weather/init files, central economy folders with `cfgeconomycore.xml`, Expansion AI config roots, and XML trees. Mission folders without `cfgeconomycore.xml` skip economy validation so partial economy folders do not fail solely for missing economy core, while XML files under those folders are still checked for well-formedness.
+Repository-wide validation discovers server roots, `serverDZ.cfg`, mission gameplay/weather/init files, central economy folders with `cfgeconomycore.xml`, Expansion AI config roots, XML trees, and Windows `.bat`/`.cmd` service scripts under each server root. Mission folders without `cfgeconomycore.xml` skip economy validation so partial economy folders do not fail solely for missing economy core, while XML files under those folders are still checked for well-formedness.
+
+Validate one Windows batch file or recursively validate a directory without executing its scripts:
+
+```sh
+dzcli validate batch ./servers/example/dayz-service.bat
+dzcli --output json validate batch ./servers
+```
+
+Batch validation fails only for proven documented violations or read errors. Opaque commands and runtime-dependent expansions remain valid. Default text output reports those files as `ok`; pass `--verbose` to show the incomplete-analysis notice, or use JSON for every informational diagnostic and source span.
 
 Use command help when building scripts or checking flags:
 

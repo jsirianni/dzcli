@@ -38,6 +38,7 @@ func (err InvalidFormatError) Error() string {
 type Envelope struct {
 	Status      string        `json:"status"`
 	TargetPath  string        `json:"target_path"`
+	Notices     []Diagnostic  `json:"notices,omitempty"`
 	Warnings    []Diagnostic  `json:"warnings"`
 	Failures    []Diagnostic  `json:"failures"`
 	Remediation []Remediation `json:"remediation"`
@@ -45,15 +46,31 @@ type Envelope struct {
 }
 
 type Diagnostic struct {
+	Code        string        `json:"code,omitempty"`
+	Severity    string        `json:"severity,omitempty"`
 	Message     string        `json:"message"`
 	Kind        string        `json:"kind"`
 	TargetPath  string        `json:"target_path"`
+	Span        *SourceSpan   `json:"span,omitempty"`
 	Remediation []Remediation `json:"remediation"`
 	Group       *WarningGroup `json:"group,omitempty"`
 
 	groupKey   string
 	groupTitle string
 	itemLabel  string
+}
+
+// SourcePosition identifies a byte and its one-based source location.
+type SourcePosition struct {
+	Offset int `json:"offset"`
+	Line   int `json:"line"`
+	Column int `json:"column"`
+}
+
+// SourceSpan identifies a half-open source range.
+type SourceSpan struct {
+	Start SourcePosition `json:"start"`
+	End   SourcePosition `json:"end"`
 }
 
 // WarningGroup describes a compact validation warning group.
@@ -81,6 +98,7 @@ type ValidationFile struct {
 	Status      string        `json:"status"`
 	Summary     string        `json:"summary"`
 	TypeCount   int           `json:"type_count"`
+	Notices     []Diagnostic  `json:"notices,omitempty"`
 	Warnings    []Diagnostic  `json:"warnings"`
 	Failures    []Diagnostic  `json:"failures"`
 	Remediation []Remediation `json:"remediation"`
@@ -218,6 +236,7 @@ func WriteValidationWithOptions(w io.Writer, targetPath string, files []Validati
 		Data:       ValidationData{Files: files},
 	}
 	for _, file := range files {
+		envelope.Notices = append(envelope.Notices, file.Notices...)
 		envelope.Warnings = append(envelope.Warnings, file.Warnings...)
 		envelope.Failures = append(envelope.Failures, file.Failures...)
 		envelope.Remediation = append(envelope.Remediation, file.Remediation...)
@@ -361,6 +380,7 @@ func normalizeEnvelope(envelope Envelope) Envelope {
 	if envelope.Status == "" {
 		envelope.Status = StatusOK
 	}
+	envelope.Notices = normalizeDiagnostics(envelope.Notices)
 	envelope.Warnings = normalizeDiagnostics(envelope.Warnings)
 	envelope.Failures = normalizeDiagnostics(envelope.Failures)
 	envelope.Remediation = normalizeRemediation(envelope.Remediation)
@@ -384,6 +404,7 @@ func normalizeValidationFile(file ValidationFile) ValidationFile {
 	if file.Status == "" {
 		file.Status = StatusOK
 	}
+	file.Notices = normalizeDiagnostics(file.Notices)
 	file.Warnings = normalizeDiagnostics(file.Warnings)
 	file.Failures = normalizeDiagnostics(file.Failures)
 	file.Remediation = normalizeRemediation(file.Remediation)

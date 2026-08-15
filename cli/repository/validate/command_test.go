@@ -63,6 +63,131 @@ func TestValidateRepositoryJSONReportsXMLFailure(t *testing.T) {
 	assertContains(t, file["target_path"].(string), "broken.xml")
 }
 
+func TestValidateRepositoryIncludesBatchFilesWithNonfatalNotices(t *testing.T) {
+	serverRoot := filepath.Join(t.TempDir(), "server")
+	if err := os.MkdirAll(filepath.Join(serverRoot, "mpmissions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	batchPath := filepath.Join(serverRoot, "service.cmd")
+	writeTestFile(t, batchPath, "vendor-tool.exe --flag\n")
+	var stdout bytes.Buffer
+
+	err := validateRepositoryWithOptions(serverRoot, &stdout, validation.DefaultTextOptions())
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, stdout.String(), "batch "+batchPath+" ok")
+	assertNotContains(t, stdout.String(), "(analysis incomplete)")
+	assertNotContains(t, stdout.String(), "notice: analysis incomplete: 1 opaque or runtime-dependent region(s)")
+
+	stdout.Reset()
+	if err := validateRepositoryWithOptions(serverRoot, &stdout, validation.TextOptions{WarningMode: validation.WarningModeCompact, Verbose: true}); err != nil {
+		t.Fatal(err)
+	}
+	assertNotContains(t, stdout.String(), "(analysis incomplete)")
+	assertContains(t, stdout.String(), "notice: analysis incomplete: 1 opaque or runtime-dependent region(s)")
+}
+
+func TestValidateRepositoryBatchFailureReturnsValidationFailure(t *testing.T) {
+	serverRoot := filepath.Join(t.TempDir(), "server")
+	if err := os.MkdirAll(filepath.Join(serverRoot, "mpmissions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	batchPath := filepath.Join(serverRoot, "service.bat")
+	writeTestFile(t, batchPath, "goto missing\n")
+	var stdout bytes.Buffer
+
+	err := validateRepositoryWithOptions(serverRoot, &stdout, validation.DefaultTextOptions())
+
+	if err != validation.ErrFailed {
+		t.Fatalf("err = %v, want validation.ErrFailed", err)
+	}
+	assertContains(t, stdout.String(), "batch "+batchPath+" failed")
+	assertContains(t, stdout.String(), "[BAT6002]")
+}
+
+func TestValidateRepositoryJSONIncludesBatchDiagnosticDetails(t *testing.T) {
+	serverRoot := filepath.Join(t.TempDir(), "server")
+	if err := os.MkdirAll(filepath.Join(serverRoot, "mpmissions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	batchPath := filepath.Join(serverRoot, "service.cmd")
+	writeTestFile(t, batchPath, "vendor-tool.exe --flag\n")
+	var stdout bytes.Buffer
+
+	err := validateRepositoryJSON(serverRoot, &stdout)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := decodeJSONEnvelope(t, stdout.String())
+	notices := jsonArray(t, envelope["notices"])
+	assertEqual(t, len(notices), 1)
+	notice := jsonObject(t, notices[0])
+	assertEqual(t, notice["code"].(string), "BAT9002")
+	assertEqual(t, notice["severity"].(string), "info")
+	files := jsonArray(t, jsonObject(t, envelope["data"])["files"])
+	assertEqual(t, len(files), 1)
+	file := jsonObject(t, files[0])
+	assertEqual(t, file["kind"].(string), "batch")
+	assertEqual(t, file["target_path"].(string), batchPath)
+	assertEqual(t, file["summary"].(string), "analysis incomplete")
+}
+
+func TestInspectRepositoryDeduplicatesOverlappingBatchTrees(t *testing.T) {
+	root := t.TempDir()
+	serverRoot := filepath.Join(root, "server")
+	nestedRoot := filepath.Join(serverRoot, "nested")
+	if err := os.MkdirAll(filepath.Join(serverRoot, "mpmissions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(nestedRoot, "mpmissions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	batchPath := filepath.Join(nestedRoot, "service.cmd")
+	writeTestFile(t, batchPath, "echo ok\n")
+
+	result, err := inspectRepository(root)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	batchCount := 0
+	for _, file := range result.files {
+		if file.Kind == "batch" {
+			batchCount++
+			assertEqual(t, file.TargetPath, batchPath)
+		}
+	}
+	assertEqual(t, batchCount, 1)
+}
+
+func TestInspectRepositoryDoesNotScanOutsideServerRootsForBatchFiles(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(root, "outside.cmd")
+	writeTestFile(t, outside, "goto missing\n")
+	serverRoot := filepath.Join(root, "server")
+	if err := os.MkdirAll(filepath.Join(serverRoot, "mpmissions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inside := filepath.Join(serverRoot, "inside.cmd")
+	writeTestFile(t, inside, "echo ok\n")
+
+	result, err := inspectRepository(root)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range result.files {
+		if file.TargetPath == outside {
+			t.Fatalf("outside batch file was validated: %#v", file)
+		}
+	}
+	assertEqual(t, len(result.files), 1)
+	assertEqual(t, result.files[0].TargetPath, inside)
+}
+
 func writeTestFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

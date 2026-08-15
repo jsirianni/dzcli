@@ -2,7 +2,7 @@
 
 Use validation commands before and after changes. Validation commands print `ok` on success and return a non-zero exit code on failure.
 
-Use `--output json` when validation output will be parsed by automation. The JSON envelope has top-level `warnings`, `failures`, and `remediation`; each inspected file is listed under `data.files` with its own `status`, `target_path`, diagnostics, and remediation.
+Use `--output json` when validation output will be parsed by automation. The JSON envelope has top-level `warnings`, `failures`, and `remediation`, plus optional nonfatal `notices`; each inspected file is listed under `data.files` with its own `status`, `target_path`, diagnostics, and remediation. Source-aware diagnostics may include a stable `code`, `severity`, and byte/line/column `span`.
 
 Text output keeps `ok` and `failed` status lines one per file. Warning output defaults to `--warnings compact`, which groups explicitly similar warnings once three or more are found. Compact JSON emits one diagnostic for each grouped warning with a `group` object containing `key`, `title`, `count`, example `items`, and optional `omitted_items`; shared remediation is included when available, otherwise the group says to rerun with `--warnings full` for per-item remediation. `--warnings full` preserves one warning and remediation entry per finding.
 
@@ -28,9 +28,30 @@ Use JSON output for automation:
 dzcli --output json validate all ./servers
 ```
 
-The command discovers server roots, validates `serverDZ.cfg` when present, checks mission-root `cfggameplay.json`, `cfgweather.xml`, and `init.c`, runs central economy validation only for mission folders containing `cfgeconomycore.xml`, inspects Expansion AI config roots, and validates XML trees under each discovered server root.
+The command discovers server roots, validates `serverDZ.cfg` when present, checks mission-root `cfggameplay.json`, `cfgweather.xml`, and `init.c`, runs central economy validation only for mission folders containing `cfgeconomycore.xml`, inspects Expansion AI config roots, validates XML trees, and recursively validates `.bat` and `.cmd` service scripts under each discovered server root.
 
 Mission folders without `cfgeconomycore.xml` skip economy validation. This avoids false failures for partial economy folders, but XML files in those folders are still included in the repository-wide XML pass.
+
+Batch discovery is limited to recognized server roots. Scripts elsewhere in a repository are not included automatically; pass their path directly to `validate batch` when they should be checked.
+
+## Windows Batch Files
+
+Validate one Windows batch file:
+
+```sh
+dzcli validate batch ./dayz-service.bat
+```
+
+Recursively validate `.bat` and `.cmd` files under a directory:
+
+```sh
+dzcli validate batch ./servers
+dzcli --output json validate batch ./servers
+```
+
+The validator is pure Go and never invokes `cmd.exe` or executes the source. It rejects only violations proven from documented Windows command-shell syntax and static semantics. Unknown external commands, dynamic expansions, and undocumented behavior remain opaque. Those boundaries keep the file valid and return exit code zero. Default text output reports the file as `ok`; use `--verbose` to show the concise incomplete-analysis notice. JSON retains every informational diagnostic and its exact source span. Proven errors and file-read failures return a non-zero exit code.
+
+Directory discovery is recursive, case-insensitive for `.bat` and `.cmd`, deterministic, and skips `.git`. Missing paths, individual non-batch files, and directories containing no batch files are errors.
 
 ## Central Economy
 
