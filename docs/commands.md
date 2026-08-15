@@ -1748,6 +1748,7 @@ dzcli validate
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ### Inherited Flags
 
@@ -1781,6 +1782,7 @@ dzcli --output json validate all ./servers
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ## dzcli validate batch
 
@@ -1800,6 +1802,7 @@ dzcli validate batch <file-or-dir>
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ## dzcli validate economy
 
@@ -1817,6 +1820,7 @@ dzcli validate economy <mission-root|cfgeconomycore.xml|economy-file>
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ## dzcli validate expansion
 
@@ -1840,6 +1844,7 @@ dzcli validate expansion
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ## dzcli validate expansion ai
 
@@ -1857,6 +1862,7 @@ dzcli validate expansion ai [path]
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ## dzcli validate gameplay
 
@@ -1874,6 +1880,7 @@ dzcli validate gameplay <cfggameplay.json>
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ## dzcli validate init
 
@@ -1891,6 +1898,7 @@ dzcli validate init <init.c>
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ## dzcli validate server
 
@@ -1908,6 +1916,7 @@ dzcli validate server <serverDZ.cfg>
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ## dzcli validate weather
 
@@ -1925,6 +1934,7 @@ dzcli validate weather <cfgweather.xml>
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ## dzcli validate xml
 
@@ -1942,6 +1952,7 @@ dzcli validate xml [path]
 | --- | --- | --- |
 | `--warnings` | `compact` | warning output: compact or full |
 | `-o, --output` | `text` | output format: text or json |
+| `-v, --verbose` | `false` | show detailed informational notices |
 
 ## dzcli version
 

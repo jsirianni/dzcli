@@ -169,6 +169,11 @@ func TestRunBatchValidationReportsIncompleteAnalysisWithoutFailing(t *testing.T)
 	assertEqual(t, code, SuccessExitCode)
 	assertEqual(t, stderr.String(), "")
 	assertContains(t, stdout.String(), "ok (analysis incomplete)")
+	assertNotContains(t, stdout.String(), "notice: analysis incomplete")
+
+	stdout.Reset()
+	code = Run([]string{"validate", "--verbose", "batch", path}, &stdout, &stderr)
+	assertEqual(t, code, SuccessExitCode)
 	assertContains(t, stdout.String(), "notice: analysis incomplete")
 }
 

@@ -49,7 +49,7 @@ dzcli validate batch ./servers
 dzcli --output json validate batch ./servers
 ```
 
-The validator is pure Go and never invokes `cmd.exe` or executes the source. It rejects only violations proven from documented Windows command-shell syntax and static semantics. Unknown external commands, dynamic expansions, and undocumented behavior remain opaque. Those boundaries keep the file valid, return exit code zero, and produce an `analysis incomplete` notice; JSON retains each informational diagnostic and its exact source span. Proven errors and file-read failures return a non-zero exit code.
+The validator is pure Go and never invokes `cmd.exe` or executes the source. It rejects only violations proven from documented Windows command-shell syntax and static semantics. Unknown external commands, dynamic expansions, and undocumented behavior remain opaque. Those boundaries keep the file valid and return exit code zero. Default text output marks the file as `ok (analysis incomplete)` without printing a separate notice; use `--verbose` to show the concise notice. JSON retains every informational diagnostic and its exact source span. Proven errors and file-read failures return a non-zero exit code.
 
 Directory discovery is recursive, case-insensitive for `.bat` and `.cmd`, deterministic, and skips `.git`. Missing paths, individual non-batch files, and directories containing no batch files are errors.
 

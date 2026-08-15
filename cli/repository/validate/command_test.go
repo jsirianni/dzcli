@@ -78,6 +78,12 @@ func TestValidateRepositoryIncludesBatchFilesWithNonfatalNotices(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertContains(t, stdout.String(), "batch "+batchPath+" ok (analysis incomplete)")
+	assertNotContains(t, stdout.String(), "notice: analysis incomplete: 1 opaque or runtime-dependent region(s)")
+
+	stdout.Reset()
+	if err := validateRepositoryWithOptions(serverRoot, &stdout, validation.TextOptions{WarningMode: validation.WarningModeCompact, Verbose: true}); err != nil {
+		t.Fatal(err)
+	}
 	assertContains(t, stdout.String(), "notice: analysis incomplete: 1 opaque or runtime-dependent region(s)")
 }
 

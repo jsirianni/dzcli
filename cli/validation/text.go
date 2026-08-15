@@ -19,6 +19,7 @@ const (
 
 type TextOptions struct {
 	WarningMode string
+	Verbose     bool
 }
 
 type TextStatus struct {
@@ -62,11 +63,20 @@ func ValidateWarningMode(cmd *cobra.Command) error {
 }
 
 func TextOptionsFromCommand(cmd *cobra.Command) TextOptions {
-	return TextOptions{WarningMode: WarningMode(cmd)}
+	return TextOptions{WarningMode: WarningMode(cmd), Verbose: Verbose(cmd)}
 }
 
 func DefaultTextOptions() TextOptions {
 	return TextOptions{WarningMode: WarningModeCompact}
+}
+
+// Verbose reports whether detailed text output is enabled.
+func Verbose(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	flag := cmd.Flag("verbose")
+	return flag != nil && flag.Value.String() == "true"
 }
 
 func RenderTextStatuses(stdout io.Writer, statuses []TextStatus, options TextOptions) error {
@@ -86,7 +96,9 @@ func RenderTextStatuses(stdout io.Writer, statuses []TextStatus, options TextOpt
 			fmt.Fprintf(stdout, "%s %s ok\n", status.Kind, status.Path)
 		}
 		printTextWarnings(stdout, status, groups, printedGroups)
-		printTextNotices(stdout, status)
+		if options.Verbose {
+			printTextNotices(stdout, status)
+		}
 	}
 	if !allOK {
 		return ErrFailed

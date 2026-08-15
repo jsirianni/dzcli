@@ -84,9 +84,11 @@ func NewFixCommand(stdout io.Writer) *cobra.Command {
 
 func NewValidateCommand(stdout io.Writer) *cobra.Command {
 	var warningMode string
+	var verbose bool
 	command := newParent("validate", "Validate DayZ configuration and service files")
 	command.SetOut(stdout)
 	validation.AddWarningModeFlag(command, &warningMode)
+	command.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "show detailed informational notices")
 	command.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		if err := output.ValidateFormat(cmd); err != nil {
 			return err

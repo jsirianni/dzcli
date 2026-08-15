@@ -62,7 +62,7 @@ dzcli validate batch ./servers/example/dayz-service.bat
 dzcli --output json validate batch ./servers
 ```
 
-Batch validation fails only for proven documented violations or read errors. Opaque commands and runtime-dependent expansions remain valid but produce a nonfatal incomplete-analysis notice.
+Batch validation fails only for proven documented violations or read errors. Opaque commands and runtime-dependent expansions remain valid. Default text output marks those files as `ok (analysis incomplete)` without a separate notice; pass `--verbose` to show the notice, or use JSON for every informational diagnostic and source span.
 
 Use command help when building scripts or checking flags:
 

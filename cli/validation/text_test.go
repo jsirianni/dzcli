@@ -69,7 +69,7 @@ func TestRenderTextStatusesDoesNotCompactStatusLines(t *testing.T) {
 	assertContains(t, output, "kind bad failed: broken")
 }
 
-func TestRenderTextStatusesPrintsNonfatalNotices(t *testing.T) {
+func TestRenderTextStatusesHidesNonfatalNoticesByDefault(t *testing.T) {
 	var stdout bytes.Buffer
 
 	err := RenderTextStatuses(&stdout, []TextStatus{{
@@ -83,6 +83,18 @@ func TestRenderTextStatusesPrintsNonfatalNotices(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertContains(t, stdout.String(), "batch service.cmd ok (analysis incomplete)")
+	assertNotContains(t, stdout.String(), "batch service.cmd notice:")
+
+	stdout.Reset()
+	err = RenderTextStatuses(&stdout, []TextStatus{{
+		Kind:    "batch",
+		Path:    "service.cmd",
+		Summary: "analysis incomplete",
+		Notices: []string{"analysis incomplete: 2 opaque regions"},
+	}}, TextOptions{WarningMode: WarningModeCompact, Verbose: true})
+	if err != nil {
+		t.Fatal(err)
+	}
 	assertContains(t, stdout.String(), "batch service.cmd notice: analysis incomplete: 2 opaque regions")
 }
 

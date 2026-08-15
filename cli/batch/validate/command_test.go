@@ -79,7 +79,16 @@ func TestValidateBatchPathReportsCompleteAndIncompleteFiles(t *testing.T) {
 	text := stdout.String()
 	assertBatchContains(t, text, "complete.cmd ok (fully validated)")
 	assertBatchContains(t, text, "opaque.bat ok (analysis incomplete)")
-	assertBatchContains(t, text, "notice: analysis incomplete: 1 opaque or runtime-dependent region(s)")
+	if strings.Contains(text, "notice:") {
+		t.Fatalf("default output contains notice: %q", text)
+	}
+
+	stdout.Reset()
+	err = ValidateBatchPathWithOptions(root, &stdout, validation.TextOptions{WarningMode: validation.WarningModeCompact, Verbose: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertBatchContains(t, stdout.String(), "notice: analysis incomplete: 1 opaque or runtime-dependent region(s)")
 }
 
 func TestValidateBatchPathRejectsEmptyDirectory(t *testing.T) {
