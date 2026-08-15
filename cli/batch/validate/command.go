@@ -151,7 +151,7 @@ func TextStatuses(statuses []FileStatus) []validation.TextStatus {
 			result = append(result, textStatus)
 			continue
 		}
-		textStatus.Summary = summary(status.Result)
+		textStatus.Summary = textSummary(status.Result)
 		textStatus.Err = statusError(status)
 		infoCount := 0
 		for _, diagnostic := range status.Result.Diagnostics {
@@ -252,6 +252,13 @@ func summary(result batchvalidate.Result) string {
 		return "fully validated"
 	}
 	return "analysis incomplete"
+}
+
+func textSummary(result batchvalidate.Result) string {
+	if result.FullyValidated {
+		return "fully validated"
+	}
+	return ""
 }
 
 func formatDiagnostic(diagnostic batchvalidate.Diagnostic) string {
